@@ -5,7 +5,7 @@ pydantic==2.9.0
 python-dotenv==1.0.1
 
 # LLM Integration
-anthropic==0.39.0
+anthropic==0.86.0
 
 # Data Processing
 pandas==2.2.2
