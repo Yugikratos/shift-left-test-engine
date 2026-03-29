@@ -53,6 +53,12 @@ class OrchestratorEngine:
         record_count = min(request.get("record_count", 100), 10000)
         date_range = request.get("date_range", {})
 
+        if not tables:
+            raise ValueError("At least one table must be specified")
+        if date_range.get("start") and date_range.get("end"):
+            if date_range["start"] > date_range["end"]:
+                raise ValueError("Date range start must be before end")
+
         # Build execution plan
         execution_plan = self._build_execution_plan(scenario, tables, record_count)
 

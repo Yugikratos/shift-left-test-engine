@@ -60,32 +60,30 @@ class SubsettingAgent(BaseAgent):
         warnings = []
 
         try:
-            conn = sqlite3.connect(source_db)
-            conn.row_factory = sqlite3.Row
+            with sqlite3.connect(source_db) as conn:
+                conn.row_factory = sqlite3.Row
 
-            for table_name, query in queries.items():
-                try:
-                    cursor = conn.execute(query["sql"], query.get("params", []))
-                    rows = cursor.fetchall()
-                    columns = [desc[0] for desc in cursor.description]
+                for table_name, query in queries.items():
+                    try:
+                        cursor = conn.execute(query["sql"], query.get("params", []))
+                        rows = cursor.fetchall()
+                        columns = [desc[0] for desc in cursor.description]
 
-                    extracted_data[table_name] = {
-                        "columns": columns,
-                        "row_count": len(rows),
-                        "data": [dict(row) for row in rows],
-                        "sql": query["sql"],
-                        "query_type": query["type"],
-                    }
+                        extracted_data[table_name] = {
+                            "columns": columns,
+                            "row_count": len(rows),
+                            "data": [dict(row) for row in rows],
+                            "sql": query["sql"],
+                            "query_type": query["type"],
+                        }
 
-                    if len(rows) == 0:
-                        warnings.append(f"{table_name}: No rows returned by subset query")
+                        if len(rows) == 0:
+                            warnings.append(f"{table_name}: No rows returned by subset query")
 
-                except Exception as e:
-                    errors.append(f"{table_name}: Query failed — {str(e)}")
+                    except sqlite3.Error as e:
+                        errors.append(f"{table_name}: Query failed — {str(e)}")
 
-            conn.close()
-
-        except Exception as e:
+        except sqlite3.Error as e:
             return AgentResult(
                 agent_name=self.name,
                 status=AgentStatus.FAILED,
@@ -138,14 +136,13 @@ class SubsettingAgent(BaseAgent):
         """Find a valid date column in the table by checking against known patterns."""
         date_candidates = ["bus_cyc_dt", "eff_strt_dt", "eff_sdt", "etl_cyc_dt"]
         try:
-            conn = sqlite3.connect(source_db)
-            cursor = conn.execute(f"PRAGMA table_info({table})")
-            actual_columns = {row[1].lower() for row in cursor.fetchall()}
-            conn.close()
+            with sqlite3.connect(source_db) as conn:
+                cursor = conn.execute(f"PRAGMA table_info({table})")
+                actual_columns = {row[1].lower() for row in cursor.fetchall()}
             for col in date_candidates:
                 if col in actual_columns:
                     return col
-        except Exception:
+        except sqlite3.Error:
             pass
         return None
 

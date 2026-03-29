@@ -9,11 +9,10 @@ load_dotenv()
 
 # ── Paths ──────────────────────────────────────────────
 BASE_DIR = Path(__file__).resolve().parent.parent
-MOCK_DATA_DIR = BASE_DIR / "mock_data"
-KNOWLEDGE_BASE_DIR = BASE_DIR / "knowledge_base"
-DML_DIR = MOCK_DATA_DIR / "dml"
-DDL_DIR = MOCK_DATA_DIR / "ddl"
-SAMPLE_DATA_DIR = MOCK_DATA_DIR / "sample_data"
+MOCK_DATA_DIR = Path(os.getenv("MOCK_DATA_DIR", BASE_DIR / "mock_data"))
+KNOWLEDGE_BASE_DIR = Path(os.getenv("KNOWLEDGE_BASE_DIR", BASE_DIR / "knowledge_base"))
+DML_DIR = Path(os.getenv("DML_DIR", MOCK_DATA_DIR / "dml"))
+DDL_DIR = Path(os.getenv("DDL_DIR", MOCK_DATA_DIR / "ddl"))
 
 # ── LLM Configuration ─────────────────────────────────
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")

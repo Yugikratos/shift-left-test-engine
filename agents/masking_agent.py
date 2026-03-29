@@ -31,14 +31,6 @@ class MaskingAgent(BaseAgent):
         self._counters = defaultdict(int)
         self._mask_map = {}  # Ensures consistent masking (same input → same output)
         self._faker = Faker()
-        self._presidio_available = False
-
-        try:
-            from presidio_analyzer import AnalyzerEngine
-            self._analyzer = AnalyzerEngine()
-            self._presidio_available = True
-        except ImportError:
-            self._analyzer = None
 
     def execute(self, context: dict) -> AgentResult:
         """Execute PII masking on extracted data.
@@ -142,8 +134,7 @@ class MaskingAgent(BaseAgent):
             "masking_stats": masking_stats,
             "before_after_samples": before_after_samples,
             "masked_data": masked_data,
-            "presidio_used": self._presidio_available,
-            "masking_method": "presidio + pattern" if self._presidio_available else "pattern_based",
+            "masking_method": "pattern_based",
         }
 
         table_summary = ", ".join(
@@ -156,7 +147,7 @@ class MaskingAgent(BaseAgent):
             data=result_data,
             summary=(
                 f"Masked {total_masked} PII values across {len(masking_stats)} tables. "
-                f"Method: {'Presidio + Pattern' if self._presidio_available else 'Pattern-based'}. "
+                f"Method: Pattern-based. "
                 f"Tables: {table_summary}"
             ),
         )

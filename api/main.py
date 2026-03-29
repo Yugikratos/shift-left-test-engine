@@ -7,7 +7,10 @@ Endpoints:
     GET  /api/v1/health      — Health check
 """
 
+import json
+import sqlite3
 import sys
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -16,9 +19,23 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
+from config.settings import KNOWLEDGE_BASE_DIR
 from orchestrator.engine import OrchestratorEngine
 from utils.db_setup import setup_all, SOURCE_DB_PATH
 from utils.llm_client import llm_client
+
+
+# ── Lifespan ──────────────────────────────────────────
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Startup and shutdown logic."""
+    if not SOURCE_DB_PATH.exists():
+        print("Setting up databases...")
+        setup_all()
+    print(f"LLM Mode: {llm_client.mode}")
+    print("API ready.")
+    yield
 
 
 # ── App Setup ──────────────────────────────────────────
@@ -27,6 +44,7 @@ app = FastAPI(
     title="Shift-Left Test Data Engine",
     description="Agentic Test Data Setup Engine — POC API",
     version="1.0.0",
+    lifespan=lifespan,
 )
 
 app.add_middleware(
@@ -39,29 +57,20 @@ app.add_middleware(
 # Initialize orchestrator
 engine = OrchestratorEngine()
 
-# Setup DB on startup
-@app.on_event("startup")
-async def startup():
-    if not SOURCE_DB_PATH.exists():
-        print("Setting up databases...")
-        setup_all()
-    print(f"LLM Mode: {llm_client.mode}")
-    print("API ready.")
-
 
 # ── Request/Response Models ────────────────────────────
 
 class DateRange(BaseModel):
-    start: str = Field(default="2024-01-01", example="2024-01-01")
-    end: str = Field(default="2024-12-31", example="2024-12-31")
+    start: str = Field(default="2024-01-01", json_schema_extra={"example": "2024-01-01"})
+    end: str = Field(default="2024-12-31", json_schema_extra={"example": "2024-12-31"})
 
 class ProvisionRequest(BaseModel):
-    scenario: str = Field(default="business_entity_flow", example="business_entity_flow")
+    scenario: str = Field(default="business_entity_flow", json_schema_extra={"example": "business_entity_flow"})
     tables: list[str] = Field(
         default=["stg_business_entity", "business_credit_score", "business_address_match"],
-        example=["stg_business_entity", "business_credit_score"]
+        json_schema_extra={"example": ["stg_business_entity", "business_credit_score"]}
     )
-    record_count: int = Field(default=100, ge=1, le=10000, example=100)
+    record_count: int = Field(default=100, ge=1, le=10000, json_schema_extra={"example": 100})
     date_range: DateRange = Field(default_factory=DateRange)
 
 class ProvisionResponse(BaseModel):
@@ -129,9 +138,6 @@ async def get_results(request_id: str):
         return {"request_id": request_id, "status": req["status"], "message": "Request not yet completed"}
 
     # Return the saved report
-    from config.settings import KNOWLEDGE_BASE_DIR
-    import json
-
     report_file = KNOWLEDGE_BASE_DIR / "profiles" / f"report_{request_id}.json"
     if report_file.exists():
         with open(report_file) as f:
@@ -143,14 +149,12 @@ async def get_results(request_id: str):
 @app.get("/api/v1/tables")
 async def list_tables():
     """List available tables in the source database."""
-    import sqlite3
     try:
-        conn = sqlite3.connect(str(SOURCE_DB_PATH))
-        cursor = conn.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
-        tables = [row[0] for row in cursor.fetchall()]
-        conn.close()
+        with sqlite3.connect(str(SOURCE_DB_PATH)) as conn:
+            cursor = conn.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
+            tables = [row[0] for row in cursor.fetchall()]
         return {"tables": tables, "count": len(tables)}
-    except Exception as e:
+    except sqlite3.Error as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 

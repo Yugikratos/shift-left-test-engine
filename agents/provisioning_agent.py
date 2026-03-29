@@ -43,58 +43,60 @@ class ProvisioningAgent(BaseAgent):
         total_loaded = 0
 
         try:
-            conn = sqlite3.connect(target_db)
-            cursor = conn.cursor()
+            with sqlite3.connect(target_db) as conn:
+                cursor = conn.cursor()
 
-            for table_name, table_data in masked_data.items():
-                data_rows = table_data.get("data", [])
-                columns = table_data.get("columns", [])
+                for table_name, table_data in masked_data.items():
+                    data_rows = table_data.get("data", [])
+                    columns = table_data.get("columns", [])
 
-                if not data_rows or not columns:
-                    warnings.append(f"{table_name}: No data to load")
-                    continue
+                    if not data_rows or not columns:
+                        warnings.append(f"{table_name}: No data to load")
+                        continue
 
-                try:
-                    # Step 1: Clear existing data in target table
-                    cursor.execute(f"DELETE FROM {table_name}")
+                    try:
+                        # Step 1: Clear existing data in target table
+                        cursor.execute(f"DELETE FROM {table_name}")
 
-                    # Step 2: Insert masked data
-                    placeholders = ", ".join(["?" for _ in columns])
-                    col_list = ", ".join(columns)
-                    insert_sql = f"INSERT INTO {table_name} ({col_list}) VALUES ({placeholders})"
+                        # Step 2: Insert masked data
+                        placeholders = ", ".join(["?" for _ in columns])
+                        col_list = ", ".join(columns)
+                        insert_sql = f"INSERT INTO {table_name} ({col_list}) VALUES ({placeholders})"
 
-                    rows_loaded = 0
-                    for row in data_rows:
-                        values = [row.get(col) for col in columns]
-                        cursor.execute(insert_sql, values)
-                        rows_loaded += 1
+                        rows_loaded = 0
+                        for row in data_rows:
+                            values = [row.get(col) for col in columns]
+                            cursor.execute(insert_sql, values)
+                            rows_loaded += 1
 
-                    load_results[table_name] = {
-                        "rows_loaded": rows_loaded,
-                        "columns": len(columns),
-                        "status": "loaded",
-                    }
-                    total_loaded += rows_loaded
+                        load_results[table_name] = {
+                            "rows_loaded": rows_loaded,
+                            "columns": len(columns),
+                            "status": "loaded",
+                        }
+                        total_loaded += rows_loaded
 
-                except Exception as e:
-                    errors.append(f"{table_name}: Load failed — {str(e)}")
-                    load_results[table_name] = {
-                        "rows_loaded": 0,
-                        "status": "failed",
-                        "error": str(e),
-                    }
+                    except sqlite3.Error as e:
+                        conn.rollback()
+                        errors.append(f"{table_name}: Load failed — {str(e)}")
+                        load_results[table_name] = {
+                            "rows_loaded": 0,
+                            "status": "failed",
+                            "error": str(e),
+                        }
 
-            conn.commit()
+                if errors:
+                    conn.rollback()
+                else:
+                    conn.commit()
 
-            # Step 3: Validate loaded data
-            for table_name in load_results:
-                if load_results[table_name]["status"] == "loaded":
-                    validation = self._validate_table(cursor, table_name, masked_data[table_name])
-                    validation_results[table_name] = validation
+                # Step 3: Validate loaded data
+                for table_name in load_results:
+                    if load_results[table_name]["status"] == "loaded":
+                        validation = self._validate_table(cursor, table_name, masked_data[table_name])
+                        validation_results[table_name] = validation
 
-            conn.close()
-
-        except Exception as e:
+        except sqlite3.Error as e:
             return AgentResult(
                 agent_name=self.name,
                 status=AgentStatus.FAILED,
