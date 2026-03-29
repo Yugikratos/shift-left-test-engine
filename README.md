@@ -1,5 +1,7 @@
 # Shift-Left Test Data Engine — POC
 
+![CI](https://github.com/Yugikratos/shift-left-test-engine/actions/workflows/test.yml/badge.svg)
+
 **Proof of Concept**
 
 An AI-powered multi-agent system that automates test data provisioning for ETL/data warehouse testing workflows. Eliminates manual effort in preparing test datasets by profiling schemas, extracting referentially-intact data subsets, masking PII, and loading into target test environments.
@@ -41,6 +43,7 @@ Submit a test data request → The system automatically:
 | **rich** | 14.3.3 | Pretty terminal output — tables, colors, progress in CLI demo |
 | **loguru** | 0.7.3 | Structured logging with automatic file rotation |
 | **httpx** | 0.28.1 | Async HTTP client used internally and for API integration tests |
+| **pytest** | 8.3.3 | Test framework — runs smoke tests and unit tests |
 | **presidio-analyzer** | NOT installed | Advanced PII detection using NLP (not needed — pattern fallback works) |
 | **presidio-anonymizer** | NOT installed | PII anonymization engine (not needed for POC) |
 
@@ -184,11 +187,13 @@ shift-left-test-engine/
 │   ├── dml/                    # Sample Ab Initio DML files
 │   └── ddl/                    # Sample Teradata DDL files
 ├── extracted_data/             # CSVs output by SubsettingAgent
-├── tests/                      # Unit & integration tests
+├── tests/
+│   └── test_pipeline.py        # Smoke test — full pipeline end-to-end
 ├── source_data.db              # SQLite source DB (mock production data)
 ├── target_test.db              # SQLite target DB (provisioned test data)
 ├── .env                        # Local config (ANTHROPIC_API_KEY — gitignored)
 ├── .env.example                # Template for .env
+├── .github/workflows/test.yml  # GitHub Actions CI pipeline
 ├── requirements.txt            # Pinned Python dependencies
 └── Dockerfile                  # Container definition
 ```
@@ -282,6 +287,20 @@ Loads masked data into target SQLite DB using SQLAlchemy. Runs validation checks
 | Values Masked | 1,644 |
 | Rows Provisioned | 150 |
 | Validation Checks | 27/27 PASSED |
+
+---
+
+## CI/CD
+
+GitHub Actions runs automatically on every push to `main`:
+
+1. Sets up Python 3.12
+2. Installs dependencies from `requirements.txt`
+3. Seeds the SQLite databases (`python -m utils.db_setup`)
+4. Runs the full 4-agent pipeline demo (`python -m orchestrator.demo`)
+5. Runs pytest (`python -m pytest tests/ -v`)
+
+Workflow file: [`.github/workflows/test.yml`](.github/workflows/test.yml)
 
 ---
 

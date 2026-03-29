@@ -38,13 +38,14 @@ python -m uvicorn api.main:app --port 8000
 | uvicorn | 0.42.0 | ASGI server |
 | pydantic | 2.12.5 | Data validation & settings |
 | python-dotenv | 1.2.2 | .env file loader |
-| anthropic | 0.86.0 | Claude API client (LLM mode) |
+| anthropic | 0.39.0 | Claude API client (LLM mode) |
 | pandas | 3.0.1 | Data manipulation |
 | faker | 40.11.1 | Synthetic data generation & PII masking |
 | sqlalchemy | 2.0.48 | ORM / DB abstraction (SQLite POC) |
 | rich | 14.3.3 | Terminal output formatting |
 | loguru | 0.7.3 | Structured logging |
 | httpx | 0.28.1 | HTTP client (API testing) |
+| pytest | 8.3.3 | Test framework |
 | presidio-analyzer | NOT installed | PII detection (masking works via pattern fallback) |
 | presidio-anonymizer | NOT installed | PII anonymization (not needed for POC) |
 
