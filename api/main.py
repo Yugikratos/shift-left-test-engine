@@ -121,10 +121,10 @@ async def get_status(request_id: str):
 @app.get("/api/v1/results/{request_id}")
 async def get_results(request_id: str):
     """Get full results of a completed provisioning request."""
-    if request_id not in engine._requests:
+    req = engine.get_request(request_id)
+    if req is None:
         raise HTTPException(status_code=404, detail=f"Request {request_id} not found")
 
-    req = engine._requests[request_id]
     if req["status"] not in ("completed", "partial"):
         return {"request_id": request_id, "status": req["status"], "message": "Request not yet completed"}
 

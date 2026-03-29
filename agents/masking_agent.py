@@ -1,11 +1,17 @@
 """Data Masking Agent — detects and anonymizes PII in extracted datasets.
 
-Uses pattern-based PII detection and applies consistent anonymization:
-- Names → PERSON_001, PERSON_002, etc.
-- Addresses → ADDR_001, ADDR_002, etc.
-- Phone numbers → 555-XXX-XXXX
-- Zip codes → XXXXX
+Uses pattern-based PII detection and applies consistent Faker-based anonymization:
+- Names → fake.name() (e.g., "John Smith")
+- Addresses → fake.street_address() (e.g., "123 Main St")
+- Cities → fake.city() (e.g., "Portland")
+- States → fake.state_abbr() (e.g., "OR")
+- Zip codes → fake.zipcode() (e.g., "97201")
+- Phones → fake.phone_number()
+- Emails → fake.email()
+- SSNs → fake.ssn()
+- Other PII → MASKED_XXXX (lexify fallback)
 
+Same input always produces same output within a run (referential consistency via cache).
 Optionally uses Presidio for enhanced NER-based PII detection.
 """
 

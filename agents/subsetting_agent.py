@@ -6,7 +6,6 @@ dataset while preserving foreign key relationships across tables.
 
 import sqlite3
 import csv
-import json
 from pathlib import Path
 
 from agents.base_agent import BaseAgent, AgentResult, AgentStatus
@@ -99,7 +98,7 @@ class SubsettingAgent(BaseAgent):
         saved_files = {}
 
         for table_name, table_data in extracted_data.items():
-            csv_path = output_dir / f"{table_name}_subset.csv"
+            csv_path = output_dir / f"{table_name.upper()}_subset.csv"
             self._save_csv(csv_path, table_data["columns"], table_data["data"])
             saved_files[table_name] = str(csv_path)
 
@@ -120,7 +119,7 @@ class SubsettingAgent(BaseAgent):
             "extracted_data": extracted_data,
         }
 
-        status = AgentStatus.COMPLETED if not errors else AgentStatus.COMPLETED
+        status = AgentStatus.COMPLETED if not errors else AgentStatus.FAILED
         return AgentResult(
             agent_name=self.name,
             status=status,
@@ -135,6 +134,21 @@ class SubsettingAgent(BaseAgent):
             ),
         )
 
+    def _find_date_column(self, table: str, source_db: str) -> str | None:
+        """Find a valid date column in the table by checking against known patterns."""
+        date_candidates = ["bus_cyc_dt", "eff_strt_dt", "eff_sdt", "etl_cyc_dt"]
+        try:
+            conn = sqlite3.connect(source_db)
+            cursor = conn.execute(f"PRAGMA table_info({table})")
+            actual_columns = {row[1].lower() for row in cursor.fetchall()}
+            conn.close()
+            for col in date_candidates:
+                if col in actual_columns:
+                    return col
+        except Exception:
+            pass
+        return None
+
     def _generate_queries(self, anchor: str, order: list, relationships: list,
                           record_count: int, date_range: dict) -> dict:
         """Generate subsetting SQL queries maintaining referential integrity."""
@@ -144,18 +158,17 @@ class SubsettingAgent(BaseAgent):
         anchor_where = []
         anchor_params = []
 
-        if date_range.get("start"):
-            # Try common date columns
-            for col in ["bus_cyc_dt", "eff_strt_dt", "eff_sdt", "etl_cyc_dt"]:
-                anchor_where.append(f"{col} >= ?")
-                anchor_params.append(date_range["start"])
-                break
+        # Find a valid date column in the anchor table
+        source_db = str(BASE_DIR / "source_data.db")
+        date_col = self._find_date_column(anchor, source_db)
 
-        if date_range.get("end"):
-            for col in ["bus_cyc_dt", "eff_strt_dt", "eff_sdt", "etl_cyc_dt"]:
-                anchor_where.append(f"{col} <= ?")
-                anchor_params.append(date_range["end"])
-                break
+        if date_col and date_range.get("start"):
+            anchor_where.append(f"{date_col} >= ?")
+            anchor_params.append(date_range["start"])
+
+        if date_col and date_range.get("end"):
+            anchor_where.append(f"{date_col} <= ?")
+            anchor_params.append(date_range["end"])
 
         where_clause = f" WHERE {' AND '.join(anchor_where)}" if anchor_where else ""
         queries[anchor] = {

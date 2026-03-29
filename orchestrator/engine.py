@@ -190,6 +190,10 @@ class OrchestratorEngine:
             },
         }
 
+    def get_request(self, request_id: str) -> dict | None:
+        """Get a request's full data by ID. Returns None if not found."""
+        return self._requests.get(request_id)
+
     def _build_execution_plan(self, scenario: str, tables: list, record_count: int) -> list:
         """Build the execution plan (ordered list of agent steps)."""
         return [

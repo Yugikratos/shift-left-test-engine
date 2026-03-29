@@ -34,7 +34,7 @@ Submit a test data request → The system automatically:
 | **uvicorn** | 0.42.0 | ASGI server that runs FastAPI |
 | **pydantic** | 2.12.5 | Request/response validation, typed settings management |
 | **python-dotenv** | 1.2.2 | Loads `.env` file into environment variables at startup |
-| **anthropic** | 0.86.0 | Official Claude API client — used by ProfilingAgent in LLM mode |
+| **anthropic** | 0.39.0 | Official Claude API client — used by ProfilingAgent in LLM mode |
 | **pandas** | 3.0.1 | DataFrame operations for data extraction, transformation, and CSV export |
 | **faker** | 40.11.1 | Generates realistic synthetic data for seeding DBs and PII masking |
 | **sqlalchemy** | 2.0.48 | ORM and DB abstraction layer — used for SQLite in POC |
@@ -182,8 +182,7 @@ shift-left-test-engine/
 │   └── profiles/               # JSON profile reports saved after each run
 ├── mock_data/
 │   ├── dml/                    # Sample Ab Initio DML files
-│   ├── ddl/                    # Sample Teradata DDL files
-│   └── sample_data/            # CSV seed data
+│   └── ddl/                    # Sample Teradata DDL files
 ├── extracted_data/             # CSVs output by SubsettingAgent
 ├── tests/                      # Unit & integration tests
 ├── source_data.db              # SQLite source DB (mock production data)
