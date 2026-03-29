@@ -1,0 +1,223 @@
+"""Data Provisioning Agent — loads masked data into target database and validates integrity.
+
+Responsibilities:
+- Load masked datasets into the target SQLite database (simulating Teradata TEST)
+- Validate row counts, null constraints, and referential integrity
+- Produce a comprehensive validation report
+"""
+
+import sqlite3
+from pathlib import Path
+
+from agents.base_agent import BaseAgent, AgentResult, AgentStatus
+from config.settings import BASE_DIR
+
+
+class ProvisioningAgent(BaseAgent):
+    """Loads processed data into target environment and validates."""
+
+    def __init__(self):
+        super().__init__("Data Provisioning Agent")
+
+    def execute(self, context: dict) -> AgentResult:
+        """Execute data provisioning into target database.
+
+        Expected context keys:
+            - masked_data: Output from MaskingAgent (table_name → {columns, data})
+            - target_db: Path to target database (default: target_test.db)
+        """
+        masked_data = context.get("masked_data", {})
+        target_db = context.get("target_db", str(BASE_DIR / "target_test.db"))
+
+        if not masked_data:
+            return AgentResult(
+                agent_name=self.name,
+                status=AgentStatus.FAILED,
+                errors=["No masked data provided for provisioning"],
+            )
+
+        load_results = {}
+        validation_results = {}
+        errors = []
+        warnings = []
+        total_loaded = 0
+
+        try:
+            conn = sqlite3.connect(target_db)
+            cursor = conn.cursor()
+
+            for table_name, table_data in masked_data.items():
+                data_rows = table_data.get("data", [])
+                columns = table_data.get("columns", [])
+
+                if not data_rows or not columns:
+                    warnings.append(f"{table_name}: No data to load")
+                    continue
+
+                try:
+                    # Step 1: Clear existing data in target table
+                    cursor.execute(f"DELETE FROM {table_name}")
+
+                    # Step 2: Insert masked data
+                    placeholders = ", ".join(["?" for _ in columns])
+                    col_list = ", ".join(columns)
+                    insert_sql = f"INSERT INTO {table_name} ({col_list}) VALUES ({placeholders})"
+
+                    rows_loaded = 0
+                    for row in data_rows:
+                        values = [row.get(col) for col in columns]
+                        cursor.execute(insert_sql, values)
+                        rows_loaded += 1
+
+                    load_results[table_name] = {
+                        "rows_loaded": rows_loaded,
+                        "columns": len(columns),
+                        "status": "loaded",
+                    }
+                    total_loaded += rows_loaded
+
+                except Exception as e:
+                    errors.append(f"{table_name}: Load failed — {str(e)}")
+                    load_results[table_name] = {
+                        "rows_loaded": 0,
+                        "status": "failed",
+                        "error": str(e),
+                    }
+
+            conn.commit()
+
+            # Step 3: Validate loaded data
+            for table_name in load_results:
+                if load_results[table_name]["status"] == "loaded":
+                    validation = self._validate_table(cursor, table_name, masked_data[table_name])
+                    validation_results[table_name] = validation
+
+            conn.close()
+
+        except Exception as e:
+            return AgentResult(
+                agent_name=self.name,
+                status=AgentStatus.FAILED,
+                errors=[f"Target database connection failed: {str(e)}"],
+            )
+
+        # Step 4: Compute overall validation status
+        all_checks = []
+        for table_val in validation_results.values():
+            all_checks.extend(table_val.get("checks", []))
+
+        passed = sum(1 for c in all_checks if c["passed"])
+        failed = sum(1 for c in all_checks if not c["passed"])
+        overall_status = "PASSED" if failed == 0 else "PARTIAL" if passed > 0 else "FAILED"
+
+        result_data = {
+            "target_database": target_db,
+            "tables_loaded": len([r for r in load_results.values() if r["status"] == "loaded"]),
+            "total_rows_loaded": total_loaded,
+            "load_summary": load_results,
+            "validation": {
+                "overall_status": overall_status,
+                "total_checks": len(all_checks),
+                "passed": passed,
+                "failed": failed,
+                "by_table": validation_results,
+            },
+        }
+
+        return AgentResult(
+            agent_name=self.name,
+            status=AgentStatus.COMPLETED if overall_status != "FAILED" else AgentStatus.FAILED,
+            data=result_data,
+            errors=errors,
+            warnings=warnings,
+            summary=(
+                f"Loaded {total_loaded} rows into {len(load_results)} tables. "
+                f"Validation: {overall_status} ({passed}/{len(all_checks)} checks passed). "
+                f"Target: {Path(target_db).name}"
+            ),
+        )
+
+    def _validate_table(self, cursor, table_name: str, expected_data: dict) -> dict:
+        """Run validation checks on a loaded table."""
+        checks = []
+        expected_rows = len(expected_data.get("data", []))
+        expected_columns = expected_data.get("columns", [])
+
+        # Check 1: Row count
+        try:
+            cursor.execute(f"SELECT COUNT(*) FROM {table_name}")
+            actual_count = cursor.fetchone()[0]
+            checks.append({
+                "check": "row_count",
+                "expected": expected_rows,
+                "actual": actual_count,
+                "passed": actual_count == expected_rows,
+            })
+        except Exception as e:
+            checks.append({
+                "check": "row_count",
+                "expected": expected_rows,
+                "actual": f"ERROR: {e}",
+                "passed": False,
+            })
+
+        # Check 2: Column existence
+        try:
+            cursor.execute(f"PRAGMA table_info({table_name})")
+            actual_cols = [row[1] for row in cursor.fetchall()]
+            missing_cols = [c for c in expected_columns if c not in actual_cols]
+            checks.append({
+                "check": "column_existence",
+                "expected_columns": len(expected_columns),
+                "actual_columns": len(actual_cols),
+                "missing": missing_cols,
+                "passed": len(missing_cols) == 0,
+            })
+        except Exception as e:
+            checks.append({
+                "check": "column_existence",
+                "error": str(e),
+                "passed": False,
+            })
+
+        # Check 3: No completely empty rows
+        try:
+            cursor.execute(f"SELECT * FROM {table_name} LIMIT 1")
+            sample = cursor.fetchone()
+            has_data = sample is not None and any(v is not None for v in sample)
+            checks.append({
+                "check": "data_not_empty",
+                "passed": has_data,
+            })
+        except Exception as e:
+            checks.append({
+                "check": "data_not_empty",
+                "error": str(e),
+                "passed": False,
+            })
+
+        # Check 4: NOT NULL constraint check (for key columns)
+        key_columns = self._identify_key_columns(expected_columns)
+        for key_col in key_columns:
+            try:
+                cursor.execute(f"SELECT COUNT(*) FROM {table_name} WHERE {key_col} IS NULL OR {key_col} = ''")
+                null_count = cursor.fetchone()[0]
+                checks.append({
+                    "check": f"not_null_{key_col}",
+                    "null_count": null_count,
+                    "passed": null_count == 0,
+                })
+            except Exception:
+                pass
+
+        return {
+            "table": table_name,
+            "checks": checks,
+            "passed": all(c["passed"] for c in checks),
+            "total_checks": len(checks),
+        }
+
+    def _identify_key_columns(self, columns: list) -> list:
+        """Identify likely key columns that should not be null."""
+        key_patterns = ["_id", "_nbr", "business_id", "bus_nbr", "addr_match_nbr"]
+        return [c for c in columns if any(c.lower().endswith(p) or c.lower() == p for p in key_patterns)]

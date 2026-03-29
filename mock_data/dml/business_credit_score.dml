@@ -1,0 +1,37 @@
+/* DML Generated for SQL: select bus_nbr,
+eff_strt_dt,
+row_typ_cd,
+row_ver_nbr,
+eff_end_dt,
+cr_scor_risk_clss_cd,
+cr_risk_pct,
+cr_risk_pt_val,
+finc_strss_scor_cd,
+finc_pct,
+finc_strss_raw_scor,
+logc_del_ind,
+dw_load_publ_id,
+dw_updt_publ_id,
+viabl_rt
+from
+FIN_CORE.BUSINESS_CREDIT_SCORE
+ * On: Wed Nov 25 06:00:21 2015
+ */
+record
+  string("\x01", maximum_length=9) bus_nbr /*CHAR(9) CHARACTER SET LATIN NOT NULL*/;
+  date("YYYY-MM-DD")("\x01") eff_strt_dt /*DATE NOT NULL*/;
+  string("\x01", maximum_length=1) row_typ_cd /*CHAR(1) CHARACTER SET LATIN NOT NULL*/;
+  string("\x01", maximum_length=3) row_ver_nbr /*CHAR(3) CHARACTER SET LATIN NOT NULL*/;
+  date("YYYY-MM-DD")("\x01") eff_end_dt = NULL("") /*DATE*/;
+  string("\x01", maximum_length=1) cr_scor_risk_clss_cd = NULL("") /*CHAR(1) CHARACTER SET LATIN*/;
+  decimal("\x01",0, maximum_length=4, sign_reserved) cr_risk_pct = NULL("") /*DECIMAL(3)*/;
+  string("\x01", maximum_length=3) cr_risk_pt_val = NULL("") /*CHAR(3) CHARACTER SET LATIN*/;
+  string("\x01", maximum_length=1) finc_strss_scor_cd = NULL("") /*CHAR(1) CHARACTER SET LATIN*/;
+  decimal("\x01",0, maximum_length=4, sign_reserved) finc_pct = NULL("") /*DECIMAL(3)*/;
+  string("\x01", maximum_length=4) finc_strss_raw_scor = NULL("") /*CHAR(4) CHARACTER SET LATIN*/;
+  string("\x01", maximum_length=1) logc_del_ind = NULL("") /*CHAR(1) CHARACTER SET LATIN*/;
+  decimal("\x01") dw_load_publ_id = NULL("") /*INTEGER*/;
+  decimal("\x01") dw_updt_publ_id = NULL("") /*INTEGER*/;
+  string("\x01", maximum_length=4) viabl_rt = NULL("") /*CHAR(4) CHARACTER SET LATIN*/;
+  string(1) newline = "\n";
+end

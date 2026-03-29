@@ -1,0 +1,22 @@
+type ETL_SRC_CTL_T =
+record
+  date("YYYY-MM-DD")("\x01") etl_cyc_dt /*DATE NOT NULL*/;
+  string("\x01", maximum_length=10) etl_proc_cd /*CHAR(10) CHARACTER SET LATIN NOT NULL*/;
+  string("\x01", maximum_length=10) src_cd /*CHAR(10) CHARACTER SET LATIN NOT NULL*/;
+  decimal("\x01") etl_rec_cnt = NULL("") /*INTEGER*/;
+  decimal("\x01") ctl_rec_cnt = NULL("") /*INTEGER*/;
+  datetime("YYYY-MM-DD HH24:MI:SS.NNNNNN")("\x01") etl_src_strt_ts = NULL("") /*TIMESTAMP(6)*/;
+  datetime("YYYY-MM-DD HH24:MI:SS.NNNNNN")("\x01") etl_src_end_ts = NULL("") /*TIMESTAMP(6)*/;
+  string("\x01", maximum_length=5) etl_src_sts_cd = NULL("") /*CHAR(5) CHARACTER SET LATIN*/;
+  string("\x01", maximum_length=20) etl_src_sts_rsn_cd = NULL("") /*VARCHAR(20) CHARACTER SET LATIN*/;
+  string("\x01", maximum_length=100) etl_src_file_chkum_txt = NULL("") /*VARCHAR(100) CHARACTER SET LATIN*/;
+  date("YYYY-MM-DD")("\x01") src_cyc_dt = NULL("") /*DATE*/;
+  string("\x01", maximum_length=100) src_file_nm = NULL("") /*VARCHAR(100) CHARACTER SET LATIN*/;
+  string("\x01", maximum_length=100) src_ctl_file_nm = NULL("") /*VARCHAR(100) CHARACTER SET LATIN*/;
+  string("\x01", maximum_length=2) dw_pubtn_src_cd /*CHAR(2) CHARACTER SET LATIN NOT NULL*/;
+  decimal("\x01") etl_cyc_id = NULL("") /*BIGINT*/;
+  string(1) newline = "\n";
+end
+;
+metadata type = ETL_SRC_CTL_T
+;

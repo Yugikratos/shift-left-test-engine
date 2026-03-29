@@ -1,0 +1,59 @@
+/* DML Generated for SQL: SELECT * FROM FIN_CORE.BUSINESS_ADDRESS_MATCH
+ * On: Thu Feb 20 11:45:30 2025
+ */
+record
+  string("\x01", maximum_length=9) addr_match_nbr /*CHAR(9) CHARACTER SET LATIN NOT NULL*/;
+  date("YYYY-MM-DD")("\x01") eff_sdt /*DATE NOT NULL*/;
+  date("YYYY-MM-DD")("\x01") eff_edt = NULL("") /*DATE*/;
+  string("\x01", maximum_length=30) acct_nm = NULL("") /*CHAR(30) CHARACTER SET LATIN*/;
+  string("\x01", maximum_length=30) acct_str_addr = NULL("") /*CHAR(30) CHARACTER SET LATIN*/;
+  string("\x01", maximum_length=30) acct_cty_nm = NULL("") /*CHAR(30) CHARACTER SET LATIN*/;
+  string("\x01", maximum_length=2) acct_st_abbr = NULL("") /*CHAR(2) CHARACTER SET LATIN*/;
+  string("\x01", maximum_length=9) mtch_zip_9_cd = NULL("") /*CHAR(9) CHARACTER SET LATIN*/;
+  string("\x01", maximum_length=10) wh_ind = NULL("") /*CHAR(10) CHARACTER SET LATIN*/;
+  string("\x01", maximum_length=6) ncoa_mv_eff_dt = NULL("") /*CHAR(6) CHARACTER SET LATIN*/;
+  string("\x01", maximum_length=1) nixie_a = NULL("") /*CHAR(1) CHARACTER SET LATIN*/;
+  string("\x01", maximum_length=1) nixie_b = NULL("") /*CHAR(1) CHARACTER SET LATIN*/;
+  string("\x01", maximum_length=1) nixie_c = NULL("") /*CHAR(1) CHARACTER SET LATIN*/;
+  string("\x01", maximum_length=10) pri_nbr = NULL("") /*CHAR(10) CHARACTER SET LATIN*/;
+  string("\x01", maximum_length=2) pre_diral = NULL("") /*CHAR(2) CHARACTER SET LATIN*/;
+  string("\x01", maximum_length=28) mtch_str_nm = NULL("") /*CHAR(28) CHARACTER SET LATIN*/;
+  string("\x01", maximum_length=4) mtch_str_sufx = NULL("") /*CHAR(4) CHARACTER SET LATIN*/;
+  string("\x01", maximum_length=2) pst_diral = NULL("") /*CHAR(2) CHARACTER SET LATIN*/;
+  string("\x01", maximum_length=4) unit_desg = NULL("") /*CHAR(4) CHARACTER SET LATIN*/;
+  string("\x01", maximum_length=8) sec_nbr = NULL("") /*CHAR(8) CHARACTER SET LATIN*/;
+  string("\x01", maximum_length=28) mtch_cty = NULL("") /*CHAR(28) CHARACTER SET LATIN*/;
+  string("\x01", maximum_length=2) mtch_st_cd = NULL("") /*CHAR(2) CHARACTER SET LATIN*/;
+  string("\x01", maximum_length=5) mtch_zip_cd = NULL("") /*CHAR(5) CHARACTER SET LATIN*/;
+  string("\x01", maximum_length=4) mtch_zip_4_cd = NULL("") /*CHAR(4) CHARACTER SET LATIN*/;
+  string("\x01", maximum_length=3) dlvr_pt_barcd = NULL("") /*CHAR(3) CHARACTER SET LATIN*/;
+  string("\x01", maximum_length=4) carr_rte_cd = NULL("") /*CHAR(4) CHARACTER SET LATIN*/;
+  string("\x01", maximum_length=1) aa_mtch_flg = NULL("") /*CHAR(1) CHARACTER SET LATIN*/;
+  string("\x01", maximum_length=1) dsf_mtch_flg = NULL("") /*CHAR(1) CHARACTER SET LATIN*/;
+  string("\x01", maximum_length=1) dsf_sort = NULL("") /*CHAR(1) CHARACTER SET LATIN*/;
+  string("\x01", maximum_length=1) dlvrabl_ind = NULL("") /*CHAR(1) CHARACTER SET LATIN*/;
+  string("\x01", maximum_length=46) pri_addr = NULL("") /*CHAR(46) CHARACTER SET LATIN*/;
+  string("\x01", maximum_length=12) sec_addr = NULL("") /*CHAR(12) CHARACTER SET LATIN*/;
+  string("\x01", maximum_length=1) prinum_chg_ind = NULL("") /*CHAR(1) CHARACTER SET LATIN*/;
+  string("\x01", maximum_length=1) predir_chg_ind = NULL("") /*CHAR(1) CHARACTER SET LATIN*/;
+  string("\x01", maximum_length=1) priname_chg_ind = NULL("") /*CHAR(1) CHARACTER SET LATIN*/;
+  string("\x01", maximum_length=1) sufx_chg_ind = NULL("") /*CHAR(1) CHARACTER SET LATIN*/;
+  string("\x01", maximum_length=1) pstdir_chg_ind = NULL("") /*CHAR(1) CHARACTER SET LATIN*/;
+  string("\x01", maximum_length=1) secunitdes_chg_ind = NULL("") /*CHAR(1) CHARACTER SET LATIN*/;
+  string("\x01", maximum_length=1) secnum_chg_ind = NULL("") /*CHAR(1) CHARACTER SET LATIN*/;
+  string("\x01", maximum_length=1) ctynm_chg_ind = NULL("") /*CHAR(1) CHARACTER SET LATIN*/;
+  string("\x01", maximum_length=1) stabrev_chg_ind = NULL("") /*CHAR(1) CHARACTER SET LATIN*/;
+  string("\x01", maximum_length=1) zipcd_chg_ind = NULL("") /*CHAR(1) CHARACTER SET LATIN*/;
+  string("\x01", maximum_length=1) zip4_chg_ind = NULL("") /*CHAR(1) CHARACTER SET LATIN*/;
+  string("\x01", maximum_length=1) mtch_cd = NULL("") /*CHAR(1) CHARACTER SET LATIN*/;
+  string("\x01", maximum_length=1) bemfab_cd = NULL("") /*CHAR(1) CHARACTER SET LATIN*/;
+  string("\x01", maximum_length=9) mtch_bus_nbr = NULL("") /*CHAR(9) CHARACTER SET LATIN*/;
+  string("\x01", maximum_length=11) mtchgrd = NULL("") /*CHAR(11) CHARACTER SET LATIN*/;
+  string("\x01", maximum_length=2) mtch_confid_cd = NULL("") /*CHAR(2) CHARACTER SET LATIN*/;
+  string("\x01", maximum_length=4) accrcy_pct_amt = NULL("") /*CHAR(4) CHARACTER SET LATIN*/;
+  string("\x01", maximum_length=9) mtch_hq_bus_nbr = NULL("") /*CHAR(9) CHARACTER SET LATIN*/;
+  decimal("\x01") dw_load_publ_id = NULL("") /*INTEGER*/;
+  decimal("\x01") dw_updt_publ_id = NULL("") /*INTEGER*/;
+  string("\x01", maximum_length=1) mtch_sts_ind = NULL("") /*CHAR(1) CHARACTER SET LATIN*/;
+  string(1) newline = "\n";
+end

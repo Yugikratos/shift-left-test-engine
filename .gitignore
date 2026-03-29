@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+venv/
+env/
+.venv/
+
+# Environment
+.env
+
+# Databases
+*.db
+*.sqlite
+*.sqlite3
+
+# Generated data (recreated by running the engine)
+extracted_data/*.csv
+knowledge_base/profiles/*.json
+logs/
+
+# Claude Code local settings
+.claude/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/

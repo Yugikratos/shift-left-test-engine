@@ -1,0 +1,13 @@
+/* DML Generated for SQL: SELECT * FROM FIN_CTL.ETL_CYC_CTL
+ * On: Wed Apr 13 14:10:35 2016
+ */
+record
+  date("YYYY-MM-DD")("\x01") etl_cyc_dt /*DATE NOT NULL*/;
+  string("\x01", maximum_length=10) etl_proc_cd /*CHAR(10) CHARACTER SET LATIN NOT NULL*/;
+  datetime("YYYY-MM-DD HH24:MI:SS.NNNNNN")("\x01") etl_cyc_strt_ts = NULL("") /*TIMESTAMP(6)*/;
+  datetime("YYYY-MM-DD HH24:MI:SS.NNNNNN")("\x01") etl_cyc_end_ts = NULL("") /*TIMESTAMP(6)*/;
+  string("\x01", maximum_length=20) etl_cyc_freq_cd = NULL("") /*VARCHAR(20) CHARACTER SET LATIN*/;
+  string("\x01", maximum_length=20) etl_cyc_sts_cd = NULL("") /*VARCHAR(20) CHARACTER SET LATIN*/;
+  decimal("\x01") etl_cyc_id = NULL("") /*BIGINT*/;
+  string(1) newline = "\n";
+end

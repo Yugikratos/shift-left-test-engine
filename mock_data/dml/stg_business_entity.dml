@@ -1,0 +1,68 @@
+/* DML Generated for SQL: SELECT * FROM FIN_STAGE.STG_BUSINESS_ENTITY
+ * On: Mon Mar 10 09:30:15 2025
+ */
+record
+  date("YYYY-MM-DD")("\x01") bus_cyc_dt /*DATE NOT NULL*/;
+  decimal("\x01") rec_seq_nbr /*INTEGER NOT NULL*/;
+  decimal("\x01") dw_load_publ_id /*INTEGER NOT NULL*/;
+  string("\x01", maximum_length=9) business_id /*CHAR(9) CHARACTER SET LATIN NOT NULL*/;
+  string("\x01", maximum_length=30) bus_short_name = NULL("") /*CHAR(30) CHARACTER SET LATIN*/;
+  string("\x01", maximum_length=30) trade_short_name = NULL("") /*CHAR(30) CHARACTER SET LATIN*/;
+  string("\x01", maximum_length=25) phys_street_addr = NULL("") /*CHAR(25) CHARACTER SET LATIN*/;
+  string("\x01", maximum_length=20) phys_city = NULL("") /*CHAR(20) CHARACTER SET LATIN*/;
+  string("\x01", maximum_length=2) phys_state_abbr = NULL("") /*CHAR(2) CHARACTER SET LATIN*/;
+  string("\x01", maximum_length=5) phys_zip_cd = NULL("") /*CHAR(5) CHARACTER SET LATIN*/;
+  string("\x01", maximum_length=4) phys_zip4_cd = NULL("") /*CHAR(4) CHARACTER SET LATIN*/;
+  string("\x01", maximum_length=25) mail_addr_line = NULL("") /*CHAR(25) CHARACTER SET LATIN*/;
+  string("\x01", maximum_length=20) mail_city = NULL("") /*CHAR(20) CHARACTER SET LATIN*/;
+  string("\x01", maximum_length=2) mail_state_abbr = NULL("") /*CHAR(2) CHARACTER SET LATIN*/;
+  string("\x01", maximum_length=5) mail_zip_cd = NULL("") /*CHAR(5) CHARACTER SET LATIN*/;
+  string("\x01", maximum_length=4) mail_zip4_cd = NULL("") /*CHAR(4) CHARACTER SET LATIN*/;
+  string("\x01", maximum_length=4) carrier_rte_cd = NULL("") /*CHAR(4) CHARACTER SET LATIN*/;
+  string("\x01", maximum_length=2) delivery_pt_cd = NULL("") /*CHAR(2) CHARACTER SET LATIN*/;
+  decimal("\x01",0, maximum_length=4, sign_reserved) geo_natl_cd = NULL("") /*DECIMAL(3)*/;
+  string("\x01", maximum_length=2) geo_state_cd = NULL("") /*CHAR(2) CHARACTER SET LATIN*/;
+  string("\x01", maximum_length=3) geo_cnty_cd = NULL("") /*CHAR(3) CHARACTER SET LATIN*/;
+  string("\x01", maximum_length=4) geo_city_cd = NULL("") /*CHAR(4) CHARACTER SET LATIN*/;
+  decimal("\x01",0, maximum_length=4, sign_reserved) geo_smsa_cd = NULL("") /*DECIMAL(3)*/;
+  string("\x01", maximum_length=2) fips_state_cd = NULL("") /*CHAR(2) CHARACTER SET LATIN*/;
+  string("\x01", maximum_length=3) fips_cnty_cd = NULL("") /*CHAR(3) CHARACTER SET LATIN*/;
+  decimal("\x01",0, maximum_length=5, sign_reserved) fips_msa_cd = NULL("") /*DECIMAL(4)*/;
+  string("\x01", maximum_length=3) filler_2 = NULL("") /*CHAR(3) CHARACTER SET LATIN*/;
+  string("\x01", maximum_length=3) bus_area_cd = NULL("") /*CHAR(3) CHARACTER SET LATIN*/;
+  string("\x01", maximum_length=3) bus_exchng_nbr = NULL("") /*CHAR(3) CHARACTER SET LATIN*/;
+  string("\x01", maximum_length=4) bus_ext_nbr = NULL("") /*CHAR(4) CHARACTER SET LATIN*/;
+  string("\x01", maximum_length=13) exec_first_nm = NULL("") /*CHAR(13) CHARACTER SET LATIN*/;
+  string("\x01", maximum_length=1) exec_mid_init = NULL("") /*CHAR(1) CHARACTER SET LATIN*/;
+  string("\x01", maximum_length=15) exec_last_nm = NULL("") /*CHAR(15) CHARACTER SET LATIN*/;
+  string("\x01", maximum_length=3) exec_suffix = NULL("") /*CHAR(3) CHARACTER SET LATIN*/;
+  string("\x01", maximum_length=10) exec_prefix = NULL("") /*CHAR(10) CHARACTER SET LATIN*/;
+  string("\x01", maximum_length=30) exec_title = NULL("") /*CHAR(30) CHARACTER SET LATIN*/;
+  string("\x01", maximum_length=4) exec_mrc = NULL("") /*CHAR(4) CHARACTER SET LATIN*/;
+  decimal("\x01",0, maximum_length=16, sign_reserved) annual_sales_volume = NULL("") /*DECIMAL(15)*/;
+  string("\x01", maximum_length=1) sales_vol_ind = NULL("") /*CHAR(1) CHARACTER SET LATIN*/;
+  decimal("\x01",0, maximum_length=10, sign_reserved) employee_cnt = NULL("") /*DECIMAL(9)*/;
+  string("\x01", maximum_length=1) emp_est_ind = NULL("") /*CHAR(1) CHARACTER SET LATIN*/;
+  decimal("\x01",0, maximum_length=10, sign_reserved) employees_here_cnt = NULL("") /*DECIMAL(9)*/;
+  string("\x01", maximum_length=1) emp_here_est_ind = NULL("") /*CHAR(1) CHARACTER SET LATIN*/;
+  decimal("\x01",0, maximum_length=5, sign_reserved) bus_year_started = NULL("") /*DECIMAL(4)*/;
+  string("\x01", maximum_length=1) bus_status_ind = NULL("") /*CHAR(1) CHARACTER SET LATIN*/;
+  string("\x01", maximum_length=1) bus_subsid_ind = NULL("") /*CHAR(1) CHARACTER SET LATIN*/;
+  string("\x01", maximum_length=1) mnfctr_ind = NULL("") /*CHAR(1) CHARACTER SET LATIN*/;
+  string("\x01", maximum_length=9) ultimate_bus_id = NULL("") /*CHAR(9) CHARACTER SET LATIN*/;
+  string("\x01", maximum_length=9) hq_bus_id = NULL("") /*CHAR(9) CHARACTER SET LATIN*/;
+  string("\x01", maximum_length=9) parent_bus_id = NULL("") /*CHAR(9) CHARACTER SET LATIN*/;
+  string("\x01", maximum_length=20) hqp_city = NULL("") /*CHAR(20) CHARACTER SET LATIN*/;
+  string("\x01", maximum_length=2) hqp_state_abbr = NULL("") /*CHAR(2) CHARACTER SET LATIN*/;
+  string("\x01", maximum_length=2) hier_cd = NULL("") /*CHAR(2) CHARACTER SET LATIN*/;
+  string("\x01", maximum_length=9) dias_cd = NULL("") /*CHAR(9) CHARACTER SET LATIN*/;
+  string("\x01", maximum_length=1) population_cd = NULL("") /*CHAR(1) CHARACTER SET LATIN*/;
+  string("\x01", maximum_length=1) trans_cd = NULL("") /*CHAR(1) CHARACTER SET LATIN*/;
+  string("\x01", maximum_length=6) report_date = NULL("") /*CHAR(6) CHARACTER SET LATIN*/;
+  string("\x01", maximum_length=1) orphan_br_ind = NULL("") /*CHAR(1) CHARACTER SET LATIN*/;
+  string("\x01", maximum_length=7) filler_3 = NULL("") /*CHAR(7) CHARACTER SET LATIN*/;
+  string("\x01", maximum_length=1) rec_class_type = NULL("") /*CHAR(1) CHARACTER SET LATIN*/;
+  string("\x01", maximum_length=10) bus_type = NULL("") /*CHAR(10) CHARACTER SET LATIN*/;
+  decimal("\x01") dw_updt_publ_id = NULL("") /*INTEGER*/;
+  string(1) newline = "\n";
+end
