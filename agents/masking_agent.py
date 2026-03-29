@@ -146,6 +146,10 @@ class MaskingAgent(BaseAgent):
             "masking_method": "presidio + pattern" if self._presidio_available else "pattern_based",
         }
 
+        table_summary = ", ".join(
+            "{}({} PII cols)".format(k, v["pii_fields"])
+            for k, v in masking_stats.items() if v["pii_fields"] > 0
+        )
         return AgentResult(
             agent_name=self.name,
             status=AgentStatus.COMPLETED,
@@ -153,7 +157,7 @@ class MaskingAgent(BaseAgent):
             summary=(
                 f"Masked {total_masked} PII values across {len(masking_stats)} tables. "
                 f"Method: {'Presidio + Pattern' if self._presidio_available else 'Pattern-based'}. "
-                f"Tables: {', '.join(f'{k}({v['pii_fields']} PII cols)' for k, v in masking_stats.items() if v['pii_fields'] > 0)}"
+                f"Tables: {table_summary}"
             ),
         )
 
