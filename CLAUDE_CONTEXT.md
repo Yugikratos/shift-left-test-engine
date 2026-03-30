@@ -7,6 +7,7 @@ Goal: Demonstrate the 5-agent pipeline works end-to-end.
 
 ## Current Status
 - Phase 1 (Fix POC bugs): COMPLETE
+- Phase 1.5 (Code quality, CI, tests): COMPLETE — 30 tests, GitHub Actions CI, hardened DB handling
 - Phase 2 (Map to real stack — Ab Initio, Teradata, Autosys): NOT STARTED
 
 ## Working Commands
@@ -23,6 +24,9 @@ python -m orchestrator.demo
 # Run API server
 python -m uvicorn api.main:app --port 8000
 # Then open: http://127.0.0.1:8000/docs
+
+# Run tests (30 tests)
+python -m pytest tests/ -v
 ```
 
 ## Development Stack
@@ -78,27 +82,40 @@ python -m uvicorn api.main:app --port 8000
 ```
 shift-left-test-engine/
 ├── agents/
+│   ├── base_agent.py           # Abstract base — all agents inherit from this
 │   ├── profiling_agent.py      # Scans tables, detects PII, maps relationships
 │   ├── subsetting_agent.py     # Extracts anchor-based data slice
 │   ├── masking_agent.py        # Type-aware PII masking using Faker
 │   └── provisioning_agent.py   # Loads to target DB, runs validation checks
 ├── orchestrator/
 │   ├── engine.py               # OrchestratorEngine — coordinates all 4 agents
+│   ├── coordinator.py          # AgentCoordinator — task assignment & progress
+│   ├── status.py               # StatusTracker — request lifecycle tracking
 │   └── demo.py                 # CLI demo runner
 ├── api/
-│   └── main.py                 # FastAPI REST endpoints
+│   └── main.py                 # FastAPI REST endpoints (lifespan-based startup)
+├── parsers/
+│   ├── dml_parser.py           # Ab Initio DML format parser
+│   └── ddl_parser.py           # Teradata DDL parser
 ├── utils/
 │   ├── db_setup.py             # Seeds source_data.db with ~690 mock records
 │   ├── llm_client.py           # Anthropic API client (falls back to rule-based)
 │   └── logger.py               # Loguru logger
 ├── config/
-│   └── settings.py             # Loads .env, defines BASE_DIR
+│   └── settings.py             # Env vars, PII/relationship detection patterns
+├── tests/
+│   ├── test_pipeline.py        # Pipeline + agent tests (15 tests)
+│   ├── test_api.py             # API endpoint tests (5 tests)
+│   └── test_parsers.py         # DML/DDL parser tests (10 tests)
 ├── knowledge_base/
 │   └── profiles/               # JSON reports saved after each run
-├── source_data.db              # SQLite source database (mock data)
-├── target_test.db              # SQLite target database (provisioned output)
-├── requirements.txt            # Original pinned versions (some fail on Python 3.14)
-└── .env                        # API keys (ANTHROPIC_API_KEY not set — fallback mode)
+├── mock_data/
+│   ├── dml/                    # Sample Ab Initio DML files
+│   └── ddl/                    # Sample Teradata DDL files
+├── .github/workflows/test.yml  # GitHub Actions CI pipeline
+├── .env.example                # Config template (path overrides, API key)
+├── requirements.txt            # Pinned Python dependencies
+└── Dockerfile                  # Python 3.12, non-root, healthcheck
 ```
 
 ## Bugs Fixed

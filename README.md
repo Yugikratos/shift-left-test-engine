@@ -169,6 +169,8 @@ shift-left-test-engine/
 │   └── provisioning_agent.py   # Loads masked data to target DB, runs validation
 ├── orchestrator/
 │   ├── engine.py               # OrchestratorEngine — validates requests, runs pipeline
+│   ├── coordinator.py          # AgentCoordinator — task assignment and progress tracking
+│   ├── status.py               # StatusTracker — request lifecycle tracking
 │   └── demo.py                 # CLI demo runner (no server required)
 ├── api/
 │   └── main.py                 # FastAPI REST endpoints + in-memory request store
@@ -188,7 +190,9 @@ shift-left-test-engine/
 │   └── ddl/                    # Sample Teradata DDL files
 ├── extracted_data/             # CSVs output by SubsettingAgent
 ├── tests/
-│   └── test_pipeline.py        # Smoke test — full pipeline end-to-end
+│   ├── test_pipeline.py        # Pipeline + agent tests (19 tests)
+│   ├── test_api.py             # API endpoint tests (5 tests)
+│   └── test_parsers.py         # DML/DDL parser tests (10 tests)
 ├── source_data.db              # SQLite source DB (mock production data)
 ├── target_test.db              # SQLite target DB (provisioned test data)
 ├── .env                        # Local config (ANTHROPIC_API_KEY — gitignored)
@@ -271,7 +275,7 @@ Anonymizes PII fields with deterministic masking (same input always produces sam
 - `id` fields → SHA-256 hash
 
 ### ProvisioningAgent
-Loads masked data into target SQLite DB using SQLAlchemy. Runs validation checks: row counts match, all expected columns exist, NOT NULL constraints satisfied. Returns pass/fail per check.
+Loads masked data into target SQLite DB with transaction safety (rollback on partial failure). Runs validation checks: row counts match, all expected columns exist, NOT NULL constraints satisfied. Returns pass/fail per check.
 
 ---
 
@@ -298,9 +302,16 @@ GitHub Actions runs automatically on every push to `main`:
 2. Installs dependencies from `requirements.txt`
 3. Seeds the SQLite databases (`python -m utils.db_setup`)
 4. Runs the full 4-agent pipeline demo (`python -m orchestrator.demo`)
-5. Runs pytest (`python -m pytest tests/ -v`)
+5. Runs pytest — **30 tests** across pipeline, API, and parsers (`python -m pytest tests/ -v`)
 
 Workflow file: [`.github/workflows/test.yml`](.github/workflows/test.yml)
+
+### Test Coverage
+| Test File | Tests | What's Covered |
+|---|---|---|
+| `test_pipeline.py` | 15 | End-to-end pipeline, individual agents, input validation, edge cases |
+| `test_api.py` | 5 | Health check, list tables, provision, 404 handling |
+| `test_parsers.py` | 10 | DML/DDL parsing, field extraction, empty input handling |
 
 ---
 
