@@ -1,0 +1,108 @@
+﻿============================= test session starts =============================
+platform win32 -- Python 3.14.3, pytest-9.0.2, pluggy-1.6.0
+rootdir: D:\shift-left-test-engine
+plugins: anyio-4.13.0, Faker-40.11.1, cov-7.1.0
+collected 30 items
+
+tests\test_api.py .....                                                  [ 16%]
+tests\test_parsers.py ..........                                         [ 50%]
+tests\test_pipeline.py ...............                                   [100%]
+
+============================== warnings summary ===============================
+tests/test_pipeline.py::test_profiling_agent_detects_pii
+  D:\shift-left-test-engine\agents\profiling_agent.py:233: ResourceWarning: unclosed database in <sqlite3.Connection object at 0x00000250D2593880>
+    if pattern in name_lower:
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/test_pipeline.py::test_profiling_agent_detects_pii
+  D:\shift-left-test-engine\agents\profiling_agent.py:233: ResourceWarning: unclosed database in <sqlite3.Connection object at 0x00000250D2593B50>
+    if pattern in name_lower:
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/test_pipeline.py::test_profiling_agent_detects_pii
+  D:\shift-left-test-engine\agents\profiling_agent.py:233: ResourceWarning: unclosed database in <sqlite3.Connection object at 0x00000250D2593C40>
+    if pattern in name_lower:
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/test_pipeline.py::test_profiling_agent_detects_pii
+  D:\shift-left-test-engine\agents\profiling_agent.py:233: ResourceWarning: unclosed database in <sqlite3.Connection object at 0x00000250D2593D30>
+    if pattern in name_lower:
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/test_pipeline.py::test_profiling_agent_detects_pii
+  D:\shift-left-test-engine\agents\profiling_agent.py:233: ResourceWarning: unclosed database in <sqlite3.Connection object at 0x00000250D2592F20>
+    if pattern in name_lower:
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/test_pipeline.py::test_profiling_agent_detects_pii
+  D:\shift-left-test-engine\agents\profiling_agent.py:233: ResourceWarning: unclosed database in <sqlite3.Connection object at 0x00000250D2592C50>
+    if pattern in name_lower:
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/test_pipeline.py::test_profiling_agent_detects_pii
+  D:\shift-left-test-engine\agents\profiling_agent.py:233: ResourceWarning: unclosed database in <sqlite3.Connection object at 0x00000250D25927A0>
+    if pattern in name_lower:
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/test_pipeline.py::test_profiling_agent_detects_pii
+  D:\shift-left-test-engine\agents\profiling_agent.py:233: ResourceWarning: unclosed database in <sqlite3.Connection object at 0x00000250D25935B0>
+    if pattern in name_lower:
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/test_pipeline.py::test_profiling_agent_detects_pii
+  D:\shift-left-test-engine\agents\profiling_agent.py:233: ResourceWarning: unclosed database in <sqlite3.Connection object at 0x00000250D2592B60>
+    if pattern in name_lower:
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/test_pipeline.py::test_profiling_agent_detects_pii
+  D:\shift-left-test-engine\agents\profiling_agent.py:233: ResourceWarning: unclosed database in <sqlite3.Connection object at 0x00000250D25936A0>
+    if pattern in name_lower:
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=============================== tests coverage ================================
+_______________ coverage: platform win32, python 3.14.3-final-0 _______________
+
+Name                           Stmts   Miss  Cover
+--------------------------------------------------
+agents\__init__.py                 0      0   100%
+agents\base_agent.py              45      5    89%
+agents\masking_agent.py          122     15    88%
+agents\profiling_agent.py        184     37    80%
+agents\provisioning_agent.py      95     17    82%
+agents\subsetting_agent.py       116     12    90%
+api\__init__.py                    0      0   100%
+api\main.py                       77     22    71%
+config\__init__.py                 0      0   100%
+config\settings.py                34      6    82%
+knowledge_base\__init__.py         0      0   100%
+mock_data\__init__.py              0      0   100%
+orchestrator\__init__.py           0      0   100%
+orchestrator\coordinator.py       29     29     0%
+orchestrator\demo.py              67     67     0%
+orchestrator\engine.py           107      9    92%
+orchestrator\status.py            31     31     0%
+parsers\__init__.py                0      0   100%
+parsers\ddl_parser.py            168     41    76%
+parsers\dml_parser.py            196     42    79%
+tests\__init__.py                  0      0   100%
+tests\test_api.py                 27      0   100%
+tests\test_parsers.py             89      6    93%
+tests\test_pipeline.py           107      2    98%
+utils\__init__.py                  0      0   100%
+utils\db_setup.py                 80     62    22%
+utils\llm_client.py               51     35    31%
+utils\logger.py                    8      0   100%
+--------------------------------------------------
+TOTAL                           1633    438    73%
+======================= 30 passed, 10 warnings in 2.35s =======================

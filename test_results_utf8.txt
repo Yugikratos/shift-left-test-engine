@@ -1,0 +1,11 @@
+﻿============================= test session starts =============================
+platform win32 -- Python 3.14.3, pytest-9.0.2, pluggy-1.6.0
+rootdir: D:\shift-left-test-engine
+plugins: anyio-4.13.0, Faker-40.11.1
+collected 30 items
+
+tests\test_api.py .....                                                  [ 16%]
+tests\test_parsers.py ..........                                         [ 50%]
+tests\test_pipeline.py ...............                                   [100%]
+
+============================= 30 passed in 1.41s ==============================
