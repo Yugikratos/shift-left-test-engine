@@ -16,7 +16,9 @@ from agents.masking_agent import MaskingAgent
 from agents.provisioning_agent import ProvisioningAgent
 from config.settings import BASE_DIR, KNOWLEDGE_BASE_DIR
 from utils.llm_client import llm_client
+from utils.logger import get_logger
 
+log = get_logger("orchestrator")
 
 class OrchestratorEngine:
     """Central orchestrator that manages the end-to-end test data provisioning pipeline."""
@@ -104,19 +106,17 @@ class OrchestratorEngine:
             "target_db": str(BASE_DIR / "target_test.db"),
         }
 
-        print(f"\n{'='*60}")
-        print(f"  Executing Request: {request_id}")
-        print(f"  Scenario: {req['scenario']}")
-        print(f"  Tables: {req['tables']}")
-        print(f"  Records: {req['record_count']}")
-        print(f"  LLM Mode: {llm_client.mode}")
-        print(f"{'='*60}\n")
+        log.info(f"Executing Request: {request_id}")
+        log.info(f"Scenario: {req['scenario']}")
+        log.debug(f"Tables: {req['tables']}")
+        log.info(f"Records: {req['record_count']}")
+        log.debug(f"LLM Mode: {llm_client.mode}")
 
         # ── Step 1: Profiling ──
-        print("  [1/4] Running Data Profiling Agent...")
+        log.info("[1/4] Running Data Profiling Agent...")
         profile_result = self.agents["profiling"].run(context)
         req["agent_results"]["profiling"] = profile_result.to_dict()
-        print(f"         → {profile_result.summary}")
+        log.info(f"→ {profile_result.summary}")
 
         if profile_result.status == AgentStatus.FAILED:
             req["status"] = "failed"
@@ -127,10 +127,10 @@ class OrchestratorEngine:
         context["pii_summary"] = profile_result.data.get("pii_summary", {})
 
         # ── Step 2: Subsetting ──
-        print("\n  [2/4] Running Smart Subsetting Agent...")
+        log.info("[2/4] Running Smart Subsetting Agent...")
         subset_result = self.agents["subsetting"].run(context)
         req["agent_results"]["subsetting"] = subset_result.to_dict()
-        print(f"         → {subset_result.summary}")
+        log.info(f"→ {subset_result.summary}")
 
         if subset_result.status == AgentStatus.FAILED:
             req["status"] = "failed"
@@ -140,10 +140,10 @@ class OrchestratorEngine:
         context["extracted_data"] = subset_result.data.get("extracted_data", {})
 
         # ── Step 3: Masking ──
-        print("\n  [3/4] Running Data Masking Agent...")
+        log.info("[3/4] Running Data Masking Agent...")
         mask_result = self.agents["masking"].run(context)
         req["agent_results"]["masking"] = mask_result.to_dict()
-        print(f"         → {mask_result.summary}")
+        log.info(f"→ {mask_result.summary}")
 
         if mask_result.status == AgentStatus.FAILED:
             req["status"] = "failed"
@@ -153,10 +153,10 @@ class OrchestratorEngine:
         context["masked_data"] = mask_result.data.get("masked_data", {})
 
         # ── Step 4: Provisioning ──
-        print("\n  [4/4] Running Data Provisioning Agent...")
+        log.info("[4/4] Running Data Provisioning Agent...")
         prov_result = self.agents["provisioning"].run(context)
         req["agent_results"]["provisioning"] = prov_result.to_dict()
-        print(f"         → {prov_result.summary}")
+        log.info(f"→ {prov_result.summary}")
 
         # Finalize
         req["status"] = "completed" if prov_result.status == AgentStatus.COMPLETED else "partial"
@@ -167,9 +167,7 @@ class OrchestratorEngine:
         # Save report
         self._save_report(request_id, report)
 
-        print(f"\n{'='*60}")
-        print(f"  Request {request_id}: {req['status'].upper()}")
-        print(f"{'='*60}\n")
+        log.info(f"Request {request_id}: {req['status'].upper()}")
 
         return report
 
@@ -269,4 +267,4 @@ class OrchestratorEngine:
         report_file = output_dir / f"report_{request_id}.json"
         with open(report_file, "w") as f:
             json.dump(report, f, indent=2, default=str)
-        print(f"  Report saved: {report_file}")
+        log.info(f"Report saved: {report_file}")
