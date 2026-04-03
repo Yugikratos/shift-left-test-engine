@@ -92,7 +92,7 @@ The system operates without an API key via rule-based pattern matching defined i
 - `tests/test_pipeline.py` (15) — End-to-end pipeline, individual agents, input validation, edge cases
 - `tests/test_api.py` (5) — Health check, list tables, provision, 404 handling
 - `tests/test_parsers.py` (10) — DML/DDL parsing, field extraction, empty input handling
-- `tests/test_gemini_features.py` (18) — Retry logic, skip flags, persistent storage, enterprise mode, RemoteExecutor, Bedrock fallback
+- `tests/test_engine_features.py` (18) — Retry logic, skip flags, persistent storage, enterprise mode, RemoteExecutor, Bedrock fallback
 
 GitHub Actions CI runs on every push/PR to `main` (`.github/workflows/test.yml`).
 

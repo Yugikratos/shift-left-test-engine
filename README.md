@@ -195,7 +195,7 @@ shift-left-test-engine/
 │   ├── test_pipeline.py        # Pipeline + agent tests (15 tests)
 │   ├── test_api.py             # API endpoint tests (5 tests)
 │   ├── test_parsers.py         # DML/DDL parser tests (10 tests)
-│   └── test_gemini_features.py # Enterprise, retry, skip flags, persistence (18 tests)
+│   └── test_engine_features.py # Enterprise, retry, skip flags, persistence (18 tests)
 ├── source_data.db              # SQLite source DB (mock production data)
 ├── target_test.db              # SQLite target DB (provisioned test data)
 ├── .env                        # Local config (ANTHROPIC_API_KEY — gitignored)
@@ -326,7 +326,7 @@ Workflow file: [`.github/workflows/test.yml`](.github/workflows/test.yml)
 | `test_pipeline.py` | 15 | End-to-end pipeline, individual agents, input validation, edge cases |
 | `test_api.py` | 5 | Health check, list tables, provision, 404 handling |
 | `test_parsers.py` | 10 | DML/DDL parsing, field extraction, empty input handling |
-| `test_gemini_features.py` | 18 | Retry logic, skip flags, persistent storage, enterprise XFR/BTEQ generation, RemoteExecutor, Bedrock fallback |
+| `test_engine_features.py` | 18 | Retry logic, skip flags, persistent storage, enterprise XFR/BTEQ generation, RemoteExecutor, Bedrock fallback |
 
 ---
 

@@ -1,4 +1,4 @@
-"""Tests for features added by Gemini — skip flags, retry logic, persistent storage, enterprise mode."""
+"""Engine feature tests — retry logic, skip flags, persistent storage, enterprise mode."""
 
 import sqlite3
 import time

@@ -16,7 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Orchestrator:** Introduced `skip_profiling`, `skip_subsetting`, `skip_masking`, and `skip_provisioning` execution flags for flexible selective pipeline execution. (Authored by Google Gemini)
 - **Docs:** Added `CHANGELOG.md` to track project evolution. (Authored by Google Gemini)
 - **Docs:** Established AI collaboration guidelines in `CLAUDE.md` for co-authorship attribution. (Authored by Google Gemini)
-- **Tests:** Added `tests/test_gemini_features.py` with 11 tests covering retry logic, skip flag validation, and persistent job storage. (Authored by Claude)
+- **Tests:** Added `tests/test_engine_features.py` with 11 tests covering retry logic, skip flag validation, and persistent job storage. (Authored by Claude)
 - **Tests:** Added 7 enterprise mode tests — XFR generation, BTEQ generation, RemoteExecutor mock, Bedrock fallback validation. (Authored by Claude)
 
 ### Changed
