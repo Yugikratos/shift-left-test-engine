@@ -65,26 +65,41 @@ class OrchestratorEngine:
             conn.commit()
 
     def submit_request(self, request: dict) -> dict:
+        """Submit a new test data provisioning request.
+
+        Args:
+            request: Dict with scenario, tables, record_count, date_range,
+                     and optional skip_* flags.
+
+        Returns:
+            Request receipt with request_id and execution plan.
+        """
         request_id = str(uuid.uuid4())[:8]
         timestamp = datetime.now().isoformat()
 
-        # Validate request
         scenario = request.get("scenario", "default")
         tables = request.get("tables", [])
         record_count = min(request.get("record_count", 100), 10000)
         date_range = request.get("date_range", {})
-        
-        # New flexibility flags
+
         skip_profiling = request.get("skip_profiling", False)
         skip_subsetting = request.get("skip_subsetting", False)
         skip_masking = request.get("skip_masking", False)
         skip_provisioning = request.get("skip_provisioning", False)
 
-        if not tables and not skip_profiling:
-            raise ValueError("At least one table must be specified unless skipping profiling")
+        # Tables are always required — agents downstream depend on them
+        if not tables:
+            raise ValueError("At least one table must be specified")
         if date_range.get("start") and date_range.get("end"):
             if date_range["start"] > date_range["end"]:
                 raise ValueError("Date range start must be before end")
+
+        # Validate skip flag dependencies: can't skip an agent if a
+        # downstream agent needs its output
+        if skip_subsetting and not skip_masking:
+            raise ValueError("Cannot skip subsetting without also skipping masking (masking needs extracted data)")
+        if skip_masking and not skip_provisioning:
+            raise ValueError("Cannot skip masking without also skipping provisioning (provisioning needs masked data)")
 
         # Build execution plan conditionally
         execution_plan = []
@@ -122,6 +137,10 @@ class OrchestratorEngine:
         }
 
     def execute_request(self, request_id: str) -> dict:
+        """Execute a submitted request through the agent pipeline.
+
+        Returns the consolidated result report.
+        """
         req = self._get_job(request_id)
         if not req:
             return {"error": f"Request {request_id} not found"}
@@ -226,10 +245,12 @@ class OrchestratorEngine:
         return report
 
     def process_request(self, request: dict) -> dict:
+        """Convenience method — submit and execute in one call."""
         receipt = self.submit_request(request)
         return self.execute_request(receipt["request_id"])
 
     def get_status(self, request_id: str) -> dict:
+        """Get current status of a request."""
         req = self._get_job(request_id)
         if not req:
             return {"error": f"Request {request_id} not found"}
@@ -247,9 +268,11 @@ class OrchestratorEngine:
         }
 
     def get_request(self, request_id: str) -> dict | None:
+        """Get a request's full data by ID. Returns None if not found."""
         return self._get_job(request_id)
 
     def _build_report(self, req: dict) -> dict:
+        """Build consolidated report from all agent results."""
         agent_results = req.get("agent_results", {})
 
         profile_data = agent_results.get("profiling", {}).get("data", {})
@@ -300,6 +323,7 @@ class OrchestratorEngine:
         }
 
     def _save_report(self, request_id: str, report: dict):
+        """Save report to knowledge base."""
         output_dir = KNOWLEDGE_BASE_DIR / "profiles"
         output_dir.mkdir(parents=True, exist_ok=True)
 
