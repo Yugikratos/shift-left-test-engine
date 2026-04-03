@@ -7,15 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Changed
-- **Orchestrator:** Refactored `OrchestratorEngine` to use structured `loguru` logging instead of naked `print()` statements for enterprise tracing. (Authored by Google Gemini)
-- **Orchestrator:** Migrated in-memory job status tracking (`self._requests`) to a persistent `metadata.db` SQLite database to survive API restarts. (Authored by Google Gemini)
-- **Agents:** Implemented a resiliency wrapper with automatic retries for transient failures in `BaseAgent.run()`. (Authored by Google Gemini)
-
 ### Added
-- **Orchestrator:** Introduced `skip_profiling`, `skip_subsetting`, `skip_masking`, and `skip_provisioning` execution flags for flexible DAG-style data workflows. (Authored by Google Gemini)
-- **Docs:** Added an explicit `CHANGELOG.md` to track project evolution. (Authored by Google Gemini)
-- **Docs:** Established AI collaboration guidelines in `CLAUDE.md`, mandating co-authorship markers and inline code attribution for both Claude and Antigravity. (Authored by Google Gemini)
+- **Orchestrator:** Introduced `skip_profiling`, `skip_subsetting`, `skip_masking`, and `skip_provisioning` execution flags for flexible selective pipeline execution. (Authored by Google Gemini)
+- **Docs:** Added `CHANGELOG.md` to track project evolution. (Authored by Google Gemini)
+- **Docs:** Established AI collaboration guidelines in `CLAUDE.md` for co-authorship attribution. (Authored by Google Gemini)
+- **Tests:** Added `tests/test_gemini_features.py` with 11 tests covering retry logic, skip flag validation, and persistent job storage. (Authored by Claude)
+
+### Changed
+- **Orchestrator:** Replaced in-memory `self._requests` dict with persistent `metadata.db` SQLite store — pipeline jobs now survive API restarts. (Authored by Google Gemini)
+- **Orchestrator:** Replaced all `print()` calls with structured `loguru` logging (console + rotating file at `logs/`). (Authored by Google Gemini)
+- **Orchestrator:** Skip flags now validate dependency chain — cannot skip subsetting without masking, or masking without provisioning. (Authored by Claude)
+- **Orchestrator:** Restored strict empty-tables validation regardless of skip flags. (Authored by Claude)
+- **Orchestrator:** Restored docstrings removed during Gemini refactor. (Authored by Claude)
+- **Agents:** `BaseAgent.run()` now only retries on transient errors (`ConnectionError`, `TimeoutError`, `OSError`) with linear backoff — non-transient exceptions fail immediately. (Authored by Claude, improved from Google Gemini)
+
+### Removed
+- **Repo:** Removed accidentally committed output files (`.coverage`, `test_results*.txt`, `coverage_results.txt`) and added them to `.gitignore`. (Authored by Claude)
 
 ## [0.1.0] - POC Baseline
 ### Added
