@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from typing import Any
+import time
 
 
 class AgentStatus(str, Enum):
@@ -62,30 +63,36 @@ class BaseAgent(ABC):
         """
         pass
 
-    def run(self, context: dict) -> AgentResult:
-        """Wrapper that handles timing and error catching."""
+    def run(self, context: dict, max_retries: int = 3, retry_delay_sec: int = 2) -> AgentResult:
+        """Wrapper that handles timing, error catching, and resiliency retries."""
         start = datetime.now()
         self._status = AgentStatus.RUNNING
 
-        try:
-            result = self.execute(context)
-            result.started_at = start.isoformat()
-            result.completed_at = datetime.now().isoformat()
-            result.duration_seconds = (datetime.now() - start).total_seconds()
-            self._status = result.status
-            return result
+        last_exception = None
+        for attempt in range(1, max_retries + 1):
+            try:
+                result = self.execute(context)
+                result.started_at = start.isoformat()
+                result.completed_at = datetime.now().isoformat()
+                result.duration_seconds = (datetime.now() - start).total_seconds()
+                self._status = result.status
+                return result
 
-        except Exception as e:
-            self._status = AgentStatus.FAILED
-            return AgentResult(
-                agent_name=self.name,
-                status=AgentStatus.FAILED,
-                started_at=start.isoformat(),
-                completed_at=datetime.now().isoformat(),
-                duration_seconds=(datetime.now() - start).total_seconds(),
-                errors=[f"Unhandled exception: {str(e)}"],
-                summary=f"{self.name} failed with error: {str(e)}",
-            )
+            except Exception as e:
+                last_exception = e
+                if attempt < max_retries:
+                    time.sleep(retry_delay_sec)
+
+        self._status = AgentStatus.FAILED
+        return AgentResult(
+            agent_name=self.name,
+            status=AgentStatus.FAILED,
+            started_at=start.isoformat(),
+            completed_at=datetime.now().isoformat(),
+            duration_seconds=(datetime.now() - start).total_seconds(),
+            errors=[f"Failed after {max_retries} attempts. Last error: {str(last_exception)}"],
+            summary=f"{self.name} failed after {max_retries} attempts: {str(last_exception)}",
+        )
 
     @property
     def status(self) -> AgentStatus:
