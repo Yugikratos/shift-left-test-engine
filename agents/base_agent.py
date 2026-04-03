@@ -63,8 +63,15 @@ class BaseAgent(ABC):
         """
         pass
 
-    def run(self, context: dict, max_retries: int = 3, retry_delay_sec: int = 2) -> AgentResult:
-        """Wrapper that handles timing, error catching, and resiliency retries."""
+    # Exceptions worth retrying — transient I/O and connection issues
+    TRANSIENT_ERRORS = (ConnectionError, TimeoutError, OSError)
+
+    def run(self, context: dict, max_retries: int = 3, retry_delay_sec: float = 1.0) -> AgentResult:
+        """Wrapper that handles timing, error catching, and retries for transient failures.
+
+        Only retries on transient errors (connection, timeout, OS-level I/O).
+        All other exceptions fail immediately.
+        """
         start = datetime.now()
         self._status = AgentStatus.RUNNING
 
@@ -78,10 +85,23 @@ class BaseAgent(ABC):
                 self._status = result.status
                 return result
 
-            except Exception as e:
+            except self.TRANSIENT_ERRORS as e:
                 last_exception = e
                 if attempt < max_retries:
-                    time.sleep(retry_delay_sec)
+                    time.sleep(retry_delay_sec * attempt)  # linear backoff
+
+            except Exception as e:
+                # Non-transient error — fail immediately, no retry
+                self._status = AgentStatus.FAILED
+                return AgentResult(
+                    agent_name=self.name,
+                    status=AgentStatus.FAILED,
+                    started_at=start.isoformat(),
+                    completed_at=datetime.now().isoformat(),
+                    duration_seconds=(datetime.now() - start).total_seconds(),
+                    errors=[f"Unhandled exception: {str(e)}"],
+                    summary=f"{self.name} failed with error: {str(e)}",
+                )
 
         self._status = AgentStatus.FAILED
         return AgentResult(
@@ -90,8 +110,8 @@ class BaseAgent(ABC):
             started_at=start.isoformat(),
             completed_at=datetime.now().isoformat(),
             duration_seconds=(datetime.now() - start).total_seconds(),
-            errors=[f"Failed after {max_retries} attempts. Last error: {str(last_exception)}"],
-            summary=f"{self.name} failed after {max_retries} attempts: {str(last_exception)}",
+            errors=[f"Failed after {max_retries} retries. Last transient error: {str(last_exception)}"],
+            summary=f"{self.name} failed after {max_retries} retries: {str(last_exception)}",
         )
 
     @property
