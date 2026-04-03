@@ -1,14 +1,11 @@
 # Python
 __pycache__/
 *.py[cod]
-*.pyo
-*.pyd
+*$py.class
+*.so
 .Python
 venv/
-env/
 .venv/
-
-# Environment
 .env
 
 # Databases
@@ -17,14 +14,16 @@ env/
 *.sqlite3
 
 # Generated data (recreated by running the engine)
-extracted_data/*.csv
-knowledge_base/profiles/*.json
+extracted_data/
+knowledge_base/profiles/
 logs/
+generated_scripts/
 
 # Test / coverage output
 .coverage
 test_results*.txt
 coverage_results.txt
+.pytest_cache/
 
 # Claude Code local settings
 .claude/
