@@ -6,6 +6,7 @@ a consolidated report.
 
 import json
 import uuid
+import sqlite3
 from datetime import datetime
 from pathlib import Path
 
@@ -20,6 +21,7 @@ from utils.logger import get_logger
 
 log = get_logger("orchestrator")
 
+
 class OrchestratorEngine:
     """Central orchestrator that manages the end-to-end test data provisioning pipeline."""
 
@@ -30,22 +32,39 @@ class OrchestratorEngine:
             "masking": MaskingAgent(),
             "provisioning": ProvisioningAgent(),
         }
-        self._requests = {}  # In-memory request store
+        self.db_path = BASE_DIR / "metadata.db"
+        self._init_db()
+
+    def _init_db(self):
+        with sqlite3.connect(str(self.db_path)) as conn:
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS pipeline_jobs (
+                    request_id TEXT PRIMARY KEY,
+                    status TEXT,
+                    submitted_at TEXT,
+                    scenario TEXT,
+                    payload_json TEXT
+                )
+            """)
+            conn.commit()
+
+    def _get_job(self, request_id: str) -> dict | None:
+        with sqlite3.connect(str(self.db_path)) as conn:
+            cur = conn.execute("SELECT payload_json FROM pipeline_jobs WHERE request_id = ?", (request_id,))
+            row = cur.fetchone()
+            if row:
+                return json.loads(row[0])
+            return None
+
+    def _save_job(self, req: dict):
+        with sqlite3.connect(str(self.db_path)) as conn:
+            conn.execute(
+                "INSERT OR REPLACE INTO pipeline_jobs (request_id, status, submitted_at, scenario, payload_json) VALUES (?, ?, ?, ?, ?)",
+                (req["request_id"], req["status"], req.get("submitted_at"), req["scenario"], json.dumps(req))
+            )
+            conn.commit()
 
     def submit_request(self, request: dict) -> dict:
-        """Submit a new test data provisioning request.
-
-        Args:
-            request: {
-                "scenario": "business_entity_flow",
-                "tables": ["stg_business_entity", "business_credit_score", ...],
-                "record_count": 100,
-                "date_range": {"start": "2024-01-01", "end": "2024-12-31"},
-            }
-
-        Returns:
-            Request receipt with request_id and execution plan.
-        """
         request_id = str(uuid.uuid4())[:8]
         timestamp = datetime.now().isoformat()
 
@@ -54,28 +73,46 @@ class OrchestratorEngine:
         tables = request.get("tables", [])
         record_count = min(request.get("record_count", 100), 10000)
         date_range = request.get("date_range", {})
+        
+        # New flexibility flags
+        skip_profiling = request.get("skip_profiling", False)
+        skip_subsetting = request.get("skip_subsetting", False)
+        skip_masking = request.get("skip_masking", False)
+        skip_provisioning = request.get("skip_provisioning", False)
 
-        if not tables:
-            raise ValueError("At least one table must be specified")
+        if not tables and not skip_profiling:
+            raise ValueError("At least one table must be specified unless skipping profiling")
         if date_range.get("start") and date_range.get("end"):
             if date_range["start"] > date_range["end"]:
                 raise ValueError("Date range start must be before end")
 
-        # Build execution plan
-        execution_plan = self._build_execution_plan(scenario, tables, record_count)
+        # Build execution plan conditionally
+        execution_plan = []
+        if not skip_profiling:
+            execution_plan.append({"step": 1, "agent": "Data Profiling Agent", "action": "Analyze DML/DDL metadata, detect PII, map relationships"})
+        if not skip_subsetting:
+            execution_plan.append({"step": 2, "agent": "Smart Subsetting Agent", "action": f"Extract {record_count} records with referential integrity"})
+        if not skip_masking:
+            execution_plan.append({"step": 3, "agent": "Data Masking Agent", "action": "Anonymize PII fields (names, addresses, phones)"})
+        if not skip_provisioning:
+            execution_plan.append({"step": 4, "agent": "Data Provisioning Agent", "action": "Load masked data into target DB and validate"})
 
-        # Store request
-        self._requests[request_id] = {
+        req = {
             "request_id": request_id,
             "submitted_at": timestamp,
             "scenario": scenario,
             "tables": tables,
             "record_count": record_count,
             "date_range": date_range,
+            "skip_profiling": skip_profiling,
+            "skip_subsetting": skip_subsetting,
+            "skip_masking": skip_masking,
+            "skip_provisioning": skip_provisioning,
             "execution_plan": execution_plan,
             "status": "submitted",
             "agent_results": {},
         }
+        self._save_job(req)
 
         return {
             "request_id": request_id,
@@ -85,16 +122,13 @@ class OrchestratorEngine:
         }
 
     def execute_request(self, request_id: str) -> dict:
-        """Execute a submitted request through the full agent pipeline.
-
-        Returns the consolidated result report.
-        """
-        if request_id not in self._requests:
+        req = self._get_job(request_id)
+        if not req:
             return {"error": f"Request {request_id} not found"}
 
-        req = self._requests[request_id]
         req["status"] = "running"
         req["started_at"] = datetime.now().isoformat()
+        self._save_job(req)
 
         context = {
             "request_id": request_id,
@@ -112,76 +146,94 @@ class OrchestratorEngine:
         log.info(f"Records: {req['record_count']}")
         log.debug(f"LLM Mode: {llm_client.mode}")
 
+        status_flag = "completed"
+
         # ── Step 1: Profiling ──
-        log.info("[1/4] Running Data Profiling Agent...")
-        profile_result = self.agents["profiling"].run(context)
-        req["agent_results"]["profiling"] = profile_result.to_dict()
-        log.info(f"→ {profile_result.summary}")
+        if not req.get("skip_profiling"):
+            log.info("[1/4] Running Data Profiling Agent...")
+            profile_result = self.agents["profiling"].run(context)
+            req["agent_results"]["profiling"] = profile_result.to_dict()
+            log.info(f"→ {profile_result.summary}")
+            
+            if profile_result.status == AgentStatus.FAILED:
+                req["status"] = "failed"
+                self._save_job(req)
+                return self._build_report(req)
+                
+            context["profile_report"] = profile_result.data
+            context["pii_summary"] = profile_result.data.get("pii_summary", {})
+        else:
+            log.info("[1/4] Skipping Data Profiling Agent...")
 
-        if profile_result.status == AgentStatus.FAILED:
-            req["status"] = "failed"
-            return self._build_report(req)
-
-        # Pass profiling output to next agents
-        context["profile_report"] = profile_result.data
-        context["pii_summary"] = profile_result.data.get("pii_summary", {})
+        self._save_job(req)
 
         # ── Step 2: Subsetting ──
-        log.info("[2/4] Running Smart Subsetting Agent...")
-        subset_result = self.agents["subsetting"].run(context)
-        req["agent_results"]["subsetting"] = subset_result.to_dict()
-        log.info(f"→ {subset_result.summary}")
+        if not req.get("skip_subsetting"):
+            log.info("[2/4] Running Smart Subsetting Agent...")
+            subset_result = self.agents["subsetting"].run(context)
+            req["agent_results"]["subsetting"] = subset_result.to_dict()
+            log.info(f"→ {subset_result.summary}")
 
-        if subset_result.status == AgentStatus.FAILED:
-            req["status"] = "failed"
-            return self._build_report(req)
+            if subset_result.status == AgentStatus.FAILED:
+                req["status"] = "failed"
+                self._save_job(req)
+                return self._build_report(req)
 
-        # Pass extracted data to masking
-        context["extracted_data"] = subset_result.data.get("extracted_data", {})
+            context["extracted_data"] = subset_result.data.get("extracted_data", {})
+        else:
+            log.info("[2/4] Skipping Smart Subsetting Agent...")
+
+        self._save_job(req)
 
         # ── Step 3: Masking ──
-        log.info("[3/4] Running Data Masking Agent...")
-        mask_result = self.agents["masking"].run(context)
-        req["agent_results"]["masking"] = mask_result.to_dict()
-        log.info(f"→ {mask_result.summary}")
+        if not req.get("skip_masking"):
+            log.info("[3/4] Running Data Masking Agent...")
+            mask_result = self.agents["masking"].run(context)
+            req["agent_results"]["masking"] = mask_result.to_dict()
+            log.info(f"→ {mask_result.summary}")
 
-        if mask_result.status == AgentStatus.FAILED:
-            req["status"] = "failed"
-            return self._build_report(req)
+            if mask_result.status == AgentStatus.FAILED:
+                req["status"] = "failed"
+                self._save_job(req)
+                return self._build_report(req)
 
-        # Pass masked data to provisioning
-        context["masked_data"] = mask_result.data.get("masked_data", {})
+            context["masked_data"] = mask_result.data.get("masked_data", {})
+        else:
+            log.info("[3/4] Skipping Data Masking Agent...")
+
+        self._save_job(req)
 
         # ── Step 4: Provisioning ──
-        log.info("[4/4] Running Data Provisioning Agent...")
-        prov_result = self.agents["provisioning"].run(context)
-        req["agent_results"]["provisioning"] = prov_result.to_dict()
-        log.info(f"→ {prov_result.summary}")
+        if not req.get("skip_provisioning"):
+            log.info("[4/4] Running Data Provisioning Agent...")
+            prov_result = self.agents["provisioning"].run(context)
+            req["agent_results"]["provisioning"] = prov_result.to_dict()
+            log.info(f"→ {prov_result.summary}")
+            if prov_result.status != AgentStatus.COMPLETED:
+                status_flag = "partial"
+        else:
+            log.info("[4/4] Skipping Data Provisioning Agent...")
 
         # Finalize
-        req["status"] = "completed" if prov_result.status == AgentStatus.COMPLETED else "partial"
+        req["status"] = status_flag
         req["completed_at"] = datetime.now().isoformat()
+        self._save_job(req)
 
         report = self._build_report(req)
-
-        # Save report
         self._save_report(request_id, report)
 
         log.info(f"Request {request_id}: {req['status'].upper()}")
-
         return report
 
     def process_request(self, request: dict) -> dict:
-        """Convenience method — submit and execute in one call."""
         receipt = self.submit_request(request)
         return self.execute_request(receipt["request_id"])
 
     def get_status(self, request_id: str) -> dict:
-        """Get current status of a request."""
-        if request_id not in self._requests:
+        req = self._get_job(request_id)
+        if not req:
             return {"error": f"Request {request_id} not found"}
 
-        req = self._requests[request_id]
         return {
             "request_id": request_id,
             "status": req["status"],
@@ -195,23 +247,11 @@ class OrchestratorEngine:
         }
 
     def get_request(self, request_id: str) -> dict | None:
-        """Get a request's full data by ID. Returns None if not found."""
-        return self._requests.get(request_id)
-
-    def _build_execution_plan(self, scenario: str, tables: list, record_count: int) -> list:
-        """Build the execution plan (ordered list of agent steps)."""
-        return [
-            {"step": 1, "agent": "Data Profiling Agent", "action": "Analyze DML/DDL metadata, detect PII, map relationships"},
-            {"step": 2, "agent": "Smart Subsetting Agent", "action": f"Extract {record_count} records with referential integrity"},
-            {"step": 3, "agent": "Data Masking Agent", "action": "Anonymize PII fields (names, addresses, phones)"},
-            {"step": 4, "agent": "Data Provisioning Agent", "action": "Load masked data into target DB and validate"},
-        ]
+        return self._get_job(request_id)
 
     def _build_report(self, req: dict) -> dict:
-        """Build consolidated report from all agent results."""
         agent_results = req.get("agent_results", {})
 
-        # Extract key metrics
         profile_data = agent_results.get("profiling", {}).get("data", {})
         subset_data = agent_results.get("subsetting", {}).get("data", {})
         mask_data = agent_results.get("masking", {}).get("data", {})
@@ -260,7 +300,6 @@ class OrchestratorEngine:
         }
 
     def _save_report(self, request_id: str, report: dict):
-        """Save report to knowledge base."""
         output_dir = KNOWLEDGE_BASE_DIR / "profiles"
         output_dir.mkdir(parents=True, exist_ok=True)
 
