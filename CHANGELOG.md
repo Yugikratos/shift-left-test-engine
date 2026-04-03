@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+### Changed
+- **Orchestrator:** Refactored `OrchestratorEngine` to use structured `loguru` logging instead of naked `print()` statements for enterprise tracing. (Authored by Antigravity)
+
 ### Added
 - **Docs:** Added an explicit `CHANGELOG.md` to track project evolution. (Authored by Antigravity)
 - **Docs:** Established AI collaboration guidelines in `CLAUDE.md`, mandating co-authorship markers and inline code attribution for both Claude and Antigravity. (Authored by Antigravity)
