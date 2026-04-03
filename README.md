@@ -40,12 +40,12 @@ Submit a test data request → The system automatically:
 | **pandas** | 3.0.1 | DataFrame operations for data extraction, transformation, and CSV export |
 | **faker** | 40.11.1 | Generates realistic synthetic data for seeding DBs and PII masking |
 | **sqlalchemy** | 2.0.48 | ORM and DB abstraction layer — used for SQLite in POC |
+| **boto3** | 1.35.0 | AWS SDK — used for Bedrock LLM provider (optional) |
+| **paramiko** | 3.5.0 | SSH client — used for enterprise remote execution (optional) |
 | **rich** | 14.3.3 | Pretty terminal output — tables, colors, progress in CLI demo |
 | **loguru** | 0.7.3 | Structured logging with automatic file rotation |
 | **httpx** | 0.28.1 | Async HTTP client used internally and for API integration tests |
 | **pytest** | 8.3.3 | Test framework — runs smoke tests and unit tests |
-| **presidio-analyzer** | NOT installed | Advanced PII detection using NLP (not needed — pattern fallback works) |
-| **presidio-anonymizer** | NOT installed | PII anonymization engine (not needed for POC) |
 
 ### Dev Tools
 | Tool | Purpose |
@@ -54,6 +54,7 @@ Submit a test data request → The system automatically:
 | Git | Version control |
 | PowerShell | Shell (Windows) |
 | Claude Code | AI coding assistant (claude.ai/code) |
+| Antigravity (Gemini) | AI coding assistant (Google Gemini) |
 | curl / Swagger UI | API testing (`http://localhost:8000/docs`) |
 | SQLite | Lightweight local database for POC (no server needed) |
 
@@ -181,8 +182,9 @@ shift-left-test-engine/
 │   └── settings.py             # Env var loading, PII/relationship detection patterns
 ├── utils/
 │   ├── db_setup.py             # Creates + seeds source_data.db (~690 mock records)
-│   ├── llm_client.py           # Claude API client — returns None if key not set
-│   └── logger.py               # Loguru logger configuration
+│   ├── llm_client.py           # LLM client (Anthropic/Bedrock) — returns None if unavailable
+│   ├── logger.py               # Loguru logger configuration
+│   └── remote_executor.py      # SSH remote executor (mock/real) for enterprise mode
 ├── knowledge_base/
 │   └── profiles/               # JSON profile reports saved after each run
 ├── mock_data/
@@ -190,9 +192,10 @@ shift-left-test-engine/
 │   └── ddl/                    # Sample Teradata DDL files
 ├── extracted_data/             # CSVs output by SubsettingAgent
 ├── tests/
-│   ├── test_pipeline.py        # Pipeline + agent tests (19 tests)
+│   ├── test_pipeline.py        # Pipeline + agent tests (15 tests)
 │   ├── test_api.py             # API endpoint tests (5 tests)
-│   └── test_parsers.py         # DML/DDL parser tests (10 tests)
+│   ├── test_parsers.py         # DML/DDL parser tests (10 tests)
+│   └── test_gemini_features.py # Enterprise, retry, skip flags, persistence (18 tests)
 ├── source_data.db              # SQLite source DB (mock production data)
 ├── target_test.db              # SQLite target DB (provisioned test data)
 ├── .env                        # Local config (ANTHROPIC_API_KEY — gitignored)
@@ -240,19 +243,30 @@ shift-left-test-engine/
 
 ---
 
-## Two Operating Modes
+## Operating Modes
 
-### With Claude API Key (LLM Mode)
-- ProfilingAgent sends schema metadata to Claude for intelligent analysis
-- Infers relationships beyond naming conventions, detects contextual PII
-- Produces natural language explanations in profile reports
-- Set `ANTHROPIC_API_KEY` in `.env` to enable
-
-### Without API Key (Rule-Based Fallback)
+### Rule-Based Fallback (default, no API key needed)
 - ProfilingAgent uses regex pattern matching from `config/settings.py`
 - PII detection: column name patterns (`*_nm`, `*_addr`, `*_phone`, `*_email`)
 - Relationship detection: matching `_id` / `_nbr` columns across tables
 - Fully functional — just less intelligent than LLM mode
+
+### LLM Mode — Anthropic Direct
+- ProfilingAgent sends schema metadata to Claude for intelligent analysis
+- Set `ANTHROPIC_API_KEY` in `.env` to enable
+
+### LLM Mode — AWS Bedrock
+- Routes LLM calls through AWS Bedrock instead of direct Anthropic API
+- Set `LLM_PROVIDER=BEDROCK` and `AWS_DEFAULT_REGION` in `.env`
+- Uses `boto3` — requires valid AWS credentials in environment
+
+### Enterprise Mode
+- Set `ENTERPRISE_MODE=true` to switch agents from local execution to script generation
+- **MaskingAgent** generates Ab Initio `.xfr` transform scripts instead of in-memory masking
+- **ProvisioningAgent** generates Teradata `.bteq` load scripts instead of SQLite inserts
+- Scripts are executed remotely via SSH (`RemoteExecutor` — mock by default)
+- Configure remote hosts via `ETL_SSH_HOST`, `ETL_SSH_USER`, `TD_SSH_HOST`, `TD_SSH_USER`
+- Pipeline steps can be skipped with `skip_profiling`, `skip_subsetting`, `skip_masking`, `skip_provisioning` flags
 
 ---
 
@@ -302,7 +316,7 @@ GitHub Actions runs automatically on every push to `main`:
 2. Installs dependencies from `requirements.txt`
 3. Seeds the SQLite databases (`python -m utils.db_setup`)
 4. Runs the full 4-agent pipeline demo (`python -m orchestrator.demo`)
-5. Runs pytest — **30 tests** across pipeline, API, and parsers (`python -m pytest tests/ -v`)
+5. Runs pytest — **48 tests** across pipeline, API, parsers, and enterprise features (`python -m pytest tests/ -v`)
 
 Workflow file: [`.github/workflows/test.yml`](.github/workflows/test.yml)
 
@@ -312,6 +326,7 @@ Workflow file: [`.github/workflows/test.yml`](.github/workflows/test.yml)
 | `test_pipeline.py` | 15 | End-to-end pipeline, individual agents, input validation, edge cases |
 | `test_api.py` | 5 | Health check, list tables, provision, 404 handling |
 | `test_parsers.py` | 10 | DML/DDL parsing, field extraction, empty input handling |
+| `test_gemini_features.py` | 18 | Retry logic, skip flags, persistent storage, enterprise XFR/BTEQ generation, RemoteExecutor, Bedrock fallback |
 
 ---
 
@@ -319,17 +334,20 @@ Workflow file: [`.github/workflows/test.yml`](.github/workflows/test.yml)
 
 When productionizing, these POC components swap out:
 
-| POC Component | Enterprise Replacement | Notes |
+| POC Component | Enterprise Replacement | Status |
 |---|---|---|
-| SQLite (source DB) | Teradata | Swap SQLAlchemy dialect + teradatasql driver |
-| SQLite (target DB) | Teradata test schema | Same swap |
-| Local DML files | Ab Initio GDE file system (RHEL paths) | Config change only |
-| Claude API direct | AWS Bedrock (Claude via Bedrock SDK) | Wrapper change in `llm_client.py` |
-| Local JSON storage | AWS S3 (boto3) | Profile reports pushed to S3 bucket |
-| Local Docker run | Docker → Nexus → ArgoCD → EKS | Same container, different deployment |
-| FastAPI local server | EKS service + AWS ALB | Kubernetes deployment |
-| Autosys | Trigger provisioning jobs via Autosys JIL | Replaces manual curl |
-| Connect:Direct | File transfer of DML/DDL to engine | Replaces local file reads |
+| SQLite (source DB) | Teradata | Pending — swap SQLAlchemy dialect + teradatasql driver |
+| SQLite (target DB) | Teradata test schema | Pending — same swap |
+| Local DML files | Ab Initio GDE file system (RHEL paths) | Pending — config change only |
+| Claude API direct | AWS Bedrock (Claude via Bedrock SDK) | **Done** — `LLM_PROVIDER=BEDROCK` in `llm_client.py` |
+| In-memory masking | Ab Initio `.xfr` script generation | **Done** — `ENTERPRISE_MODE=true` in MaskingAgent |
+| SQLite provisioning | Teradata `.bteq` script generation | **Done** — `ENTERPRISE_MODE=true` in ProvisioningAgent |
+| Local execution | SSH remote execution via `paramiko` | **Done** — `RemoteExecutor` (mock by default) |
+| Local JSON storage | AWS S3 (boto3) | Pending — profile reports pushed to S3 bucket |
+| Local Docker run | Docker → Nexus → ArgoCD → EKS | Pending — same container, different deployment |
+| FastAPI local server | EKS service + AWS ALB | Pending — Kubernetes deployment |
+| Autosys | Trigger provisioning jobs via Autosys JIL | Pending — replaces manual curl |
+| Connect:Direct | File transfer of DML/DDL to engine | Pending — replaces local file reads |
 
 **Current test volume (manual baseline):** 7 cycles/quarter × 3 batches/cycle × ~10 hrs/batch = ~210 hrs/quarter manual effort being targeted for automation.
 
