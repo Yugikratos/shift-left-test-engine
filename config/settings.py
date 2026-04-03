@@ -14,10 +14,14 @@ KNOWLEDGE_BASE_DIR = Path(os.getenv("KNOWLEDGE_BASE_DIR", BASE_DIR / "knowledge_
 DML_DIR = Path(os.getenv("DML_DIR", MOCK_DATA_DIR / "dml"))
 DDL_DIR = Path(os.getenv("DDL_DIR", MOCK_DATA_DIR / "ddl"))
 
+# ── App Mode ───────────────────────────────────────────
+ENTERPRISE_MODE = os.getenv("ENTERPRISE_MODE", "false").lower() == "true"
+
 # ── LLM Configuration ─────────────────────────────────
+LLM_PROVIDER = os.getenv("LLM_PROVIDER", "ANTHROPIC")
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 LLM_MODEL = os.getenv("LLM_MODEL", "claude-sonnet-4-20250514")
-LLM_ENABLED = bool(ANTHROPIC_API_KEY)
+LLM_ENABLED = bool(ANTHROPIC_API_KEY) or LLM_PROVIDER == "BEDROCK"
 
 # ── Database ───────────────────────────────────────────
 DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{BASE_DIR / 'test_data_engine.db'}")

@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Enterprise Mode:** Implemented `ENTERPRISE_MODE` toggle in `config/settings.py` to bypass local execution. (Authored by Google Gemini)
+- **Code Generation:** `MaskingAgent` now generates Ab Initio `.XFR` transform scripts natively when in Enterprise Mode. (Authored by Google Gemini)
+- **Code Generation:** `ProvisioningAgent` now generates Teradata `.BTEQ` load scripts natively when in Enterprise Mode. (Authored by Google Gemini)
+- **Cloud Security:** Upgraded `llm_client.py` to dynamically proxy requests securely through AWS Bedrock using `boto3` when `LLM_PROVIDER=BEDROCK`. (Authored by Google Gemini)
+- **Remote Execution:** Added `RemoteExecutor` stub via `paramiko` to safely trigger Ab Initio `air sandbox run` mock commands over SSH. (Authored by Google Gemini)
 - **Orchestrator:** Introduced `skip_profiling`, `skip_subsetting`, `skip_masking`, and `skip_provisioning` execution flags for flexible selective pipeline execution. (Authored by Google Gemini)
 - **Docs:** Added `CHANGELOG.md` to track project evolution. (Authored by Google Gemini)
 - **Docs:** Established AI collaboration guidelines in `CLAUDE.md` for co-authorship attribution. (Authored by Google Gemini)
