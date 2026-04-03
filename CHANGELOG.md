@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Docs:** Added `CHANGELOG.md` to track project evolution. (Authored by Google Gemini)
 - **Docs:** Established AI collaboration guidelines in `CLAUDE.md` for co-authorship attribution. (Authored by Google Gemini)
 - **Tests:** Added `tests/test_gemini_features.py` with 11 tests covering retry logic, skip flag validation, and persistent job storage. (Authored by Claude)
+- **Tests:** Added 7 enterprise mode tests — XFR generation, BTEQ generation, RemoteExecutor mock, Bedrock fallback validation. (Authored by Claude)
 
 ### Changed
 - **Orchestrator:** Replaced in-memory `self._requests` dict with persistent `metadata.db` SQLite store — pipeline jobs now survive API restarts. (Authored by Google Gemini)
@@ -25,6 +26,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Orchestrator:** Restored strict empty-tables validation regardless of skip flags. (Authored by Claude)
 - **Orchestrator:** Restored docstrings removed during Gemini refactor. (Authored by Claude)
 - **Agents:** `BaseAgent.run()` now only retries on transient errors (`ConnectionError`, `TimeoutError`, `OSError`) with linear backoff — non-transient exceptions fail immediately. (Authored by Claude, improved from Google Gemini)
+
+### Fixed
+- **Security:** `RemoteExecutor` now uses `paramiko.RejectPolicy()` with known-hosts verification instead of `AutoAddPolicy()`. (Authored by Claude)
+- **Security:** BTEQ scripts no longer contain hardcoded `.LOGON TDPID/USER,PASSWORD` — use `.RUN FILE=logon.bteq` for credential sourcing. (Authored by Claude)
+- **Security:** BTEQ scripts now wrap operations in `BT;`/`ET;` transaction blocks. (Authored by Claude)
+- **Enterprise:** Hardcoded SSH hostnames/users moved to `config/settings.py` with env var overrides (`ETL_SSH_HOST`, `ETL_SSH_USER`, `TD_SSH_HOST`, `TD_SSH_USER`). (Authored by Claude)
+- **Enterprise:** `MaskingAgent` now emits a warning that XFR stub passes unmasked schema only. (Authored by Claude)
+- **Enterprise:** Both agents now validate data exists before generating scripts in enterprise mode. (Authored by Claude)
+- **LLM:** `LLM_ENABLED` for Bedrock now requires `AWS_DEFAULT_REGION` to be set, preventing silent failures. (Authored by Claude)
+- **Deps:** Re-pinned `sqlalchemy==2.0.48`, `boto3==1.35.0`, `paramiko==3.5.0` — unpinned deps removed. (Authored by Claude)
+- **Imports:** Moved `RemoteExecutor` imports from inside `execute()` to top-level in both agents. (Authored by Claude)
 
 ### Removed
 - **Repo:** Removed accidentally committed output files (`.coverage`, `test_results*.txt`, `coverage_results.txt`) and added them to `.gitignore`. (Authored by Claude)
