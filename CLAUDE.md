@@ -1,6 +1,7 @@
 # CLAUDE.md
+<!-- Modified by Antigravity to include AI Collaboration Rules -->
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to Claude Code (claude.ai/code) and Antigravity when working with code in this repository.
 
 # Shift-Left Test Data Engine — POC
 
@@ -101,3 +102,11 @@ GitHub Actions CI runs on every push/PR to `main` (`.github/workflows/test.yml`)
 - `.env` file for config (see `.env.example`); all paths overridable via env vars
 - Reports saved as JSON to `knowledge_base/profiles/`
 - Mock data (DML/DDL/CSV) lives in `mock_data/`
+
+## AI Assistant Rules
+Whenever an AI assistant (Antigravity or Claude) makes changes to this repository:
+1. **Git Commits:** Always add the respective AI (or both) as co-authors to Git commit messages via Git trailers.
+   Example: 
+   `Co-authored-by: Antigravity <antigravity@google.com>`
+   `Co-authored-by: Claude <claude@anthropic.com>`
+2. **File Modifications:** Explicitly add a mention/comment indicating that the change was done by you (e.g., `Authored by Antigravity` or `Modified by Claude`) in docstrings or inline comments wherever required or whenever significant logic is changed.
