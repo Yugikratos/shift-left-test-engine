@@ -17,11 +17,17 @@ DDL_DIR = Path(os.getenv("DDL_DIR", MOCK_DATA_DIR / "ddl"))
 # ── App Mode ───────────────────────────────────────────
 ENTERPRISE_MODE = os.getenv("ENTERPRISE_MODE", "false").lower() == "true"
 
+# ── Enterprise Remote Hosts ───────────────────────────
+ETL_SSH_HOST = os.getenv("ETL_SSH_HOST", "rhel-etl-prod.internal")
+ETL_SSH_USER = os.getenv("ETL_SSH_USER", "ab_svc")
+TD_SSH_HOST = os.getenv("TD_SSH_HOST", "td-etl-prod.internal")
+TD_SSH_USER = os.getenv("TD_SSH_USER", "td_svc")
+
 # ── LLM Configuration ─────────────────────────────────
 LLM_PROVIDER = os.getenv("LLM_PROVIDER", "ANTHROPIC")
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 LLM_MODEL = os.getenv("LLM_MODEL", "claude-sonnet-4-20250514")
-LLM_ENABLED = bool(ANTHROPIC_API_KEY) or LLM_PROVIDER == "BEDROCK"
+LLM_ENABLED = bool(ANTHROPIC_API_KEY) or (LLM_PROVIDER == "BEDROCK" and bool(os.getenv("AWS_DEFAULT_REGION")))
 
 # ── Database ───────────────────────────────────────────
 DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{BASE_DIR / 'test_data_engine.db'}")

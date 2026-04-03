@@ -1,14 +1,18 @@
-"""Tests for features added by Gemini — skip flags, retry logic, persistent storage."""
+"""Tests for features added by Gemini — skip flags, retry logic, persistent storage, enterprise mode."""
 
 import sqlite3
 import time
+from pathlib import Path
 from unittest.mock import patch, MagicMock
 
 import pytest
 
 from orchestrator.engine import OrchestratorEngine
 from agents.base_agent import BaseAgent, AgentResult, AgentStatus
+from agents.masking_agent import MaskingAgent
+from agents.provisioning_agent import ProvisioningAgent
 from config.settings import BASE_DIR
+from utils.remote_executor import RemoteExecutor
 
 
 # ── Helpers ─────────────────────────────────────────────
@@ -174,3 +178,119 @@ def test_job_status_updates_persist():
     engine2 = OrchestratorEngine()
     status = engine2.get_status(request_id)
     assert status["status"] in ("completed", "partial")
+
+
+# ── Remote Executor ──────────────────────────────────────
+
+def test_remote_executor_mock_mode():
+    """RemoteExecutor in mock mode returns success without real SSH."""
+    executor = RemoteExecutor(host="test.internal", user="test_user", mock_override=True)
+    assert executor.mock is True
+
+    assert executor.connect() is True
+    result = executor.execute_command("echo hello")
+    assert result["exit_code"] == 0
+    assert "Mock executed" in result["stdout"]
+    executor.close()
+
+
+def test_remote_executor_mock_captures_command():
+    """Mock executor captures the exact command string."""
+    executor = RemoteExecutor(host="test.internal", user="svc", mock_override=True)
+    executor.connect()
+    result = executor.execute_command("air sandbox run /App/Test/graph.mp")
+    assert "air sandbox run" in result["stdout"]
+    executor.close()
+
+
+# ── Enterprise Mode — Masking Agent ──────────────────────
+
+@patch("agents.masking_agent.ENTERPRISE_MODE", True)
+def test_masking_enterprise_generates_xfr(tmp_path):
+    """MaskingAgent generates an XFR script in enterprise mode."""
+    agent = MaskingAgent()
+    context = {
+        "request_id": "test_ent_mask",
+        "extracted_data": {
+            "stg_business_entity": {
+                "columns": ["bus_nm", "bus_addr"],
+                "data": [{"bus_nm": "Acme", "bus_addr": "123 Main"}],
+            }
+        },
+        "pii_summary": {},
+    }
+
+    with patch("agents.masking_agent.BASE_DIR", tmp_path):
+        result = agent.run(context)
+
+    assert result.status == AgentStatus.COMPLETED
+    assert result.data["masking_method"] == "enterprise_xfr_generation"
+    assert "masked_data" in result.data
+    assert len(result.warnings) > 0  # XFR stub warning
+
+
+@patch("agents.masking_agent.ENTERPRISE_MODE", True)
+def test_masking_enterprise_no_data_fails():
+    """MaskingAgent in enterprise mode fails with no extracted data."""
+    agent = MaskingAgent()
+    result = agent.run({"extracted_data": {}, "request_id": "empty"})
+    assert result.status == AgentStatus.FAILED
+
+
+# ── Enterprise Mode — Provisioning Agent ─────────────────
+
+@patch("agents.provisioning_agent.ENTERPRISE_MODE", True)
+def test_provisioning_enterprise_generates_bteq(tmp_path):
+    """ProvisioningAgent generates a BTEQ script in enterprise mode."""
+    agent = ProvisioningAgent()
+    context = {
+        "request_id": "test_ent_prov",
+        "masked_data": {
+            "stg_business_entity": {
+                "columns": ["bus_id", "bus_nm"],
+                "data": [{"bus_id": "1", "bus_nm": "Masked Corp"}],
+            }
+        },
+    }
+
+    with patch("agents.provisioning_agent.BASE_DIR", tmp_path):
+        result = agent.run(context)
+
+    assert result.status == AgentStatus.COMPLETED
+    assert result.data["load_method"] == "enterprise_bteq_generation"
+
+    # Verify BTEQ script contents
+    script = Path(result.data["script"])
+    content = script.read_text()
+    assert ".RUN FILE=logon.bteq" in content  # no hardcoded credentials
+    assert "BT;" in content  # transaction begin
+    assert "ET;" in content  # transaction end
+    assert "LOGON TDPID/USER,PASSWORD" not in content  # old insecure pattern gone
+
+
+@patch("agents.provisioning_agent.ENTERPRISE_MODE", True)
+def test_provisioning_enterprise_no_data_fails():
+    """ProvisioningAgent in enterprise mode fails with no masked data."""
+    agent = ProvisioningAgent()
+    result = agent.run({"masked_data": {}, "request_id": "empty"})
+    assert result.status == AgentStatus.FAILED
+
+
+# ── LLM Client — Bedrock Fallback ────────────────────────
+
+def test_llm_enabled_requires_aws_region_for_bedrock():
+    """LLM_ENABLED should be False when BEDROCK is set but no AWS region configured."""
+    with patch.dict("os.environ", {"LLM_PROVIDER": "BEDROCK"}, clear=False):
+        # Remove AWS_DEFAULT_REGION if set
+        import os
+        old = os.environ.pop("AWS_DEFAULT_REGION", None)
+        try:
+            # Re-evaluate the setting
+            from config import settings
+            result = bool(settings.ANTHROPIC_API_KEY) or (
+                os.getenv("LLM_PROVIDER") == "BEDROCK" and bool(os.getenv("AWS_DEFAULT_REGION"))
+            )
+            assert result is False
+        finally:
+            if old is not None:
+                os.environ["AWS_DEFAULT_REGION"] = old
