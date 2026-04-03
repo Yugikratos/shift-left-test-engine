@@ -104,9 +104,9 @@ GitHub Actions CI runs on every push/PR to `main` (`.github/workflows/test.yml`)
 - Mock data (DML/DDL/CSV) lives in `mock_data/`
 
 ## AI Assistant Rules
-Whenever an AI assistant (Antigravity or Claude) makes changes to this repository:
+Whenever an AI assistant (Google Gemini or Claude) makes changes to this repository:
 1. **Git Commits:** Always add the respective AI (or both) as co-authors to Git commit messages via Git trailers.
    Example: 
-   `Co-authored-by: Antigravity <antigravity-ai@users.noreply.github.com>`
+   `Co-authored-by: Google Gemini <noreply@google.com>`
    `Co-authored-by: Claude <claude@anthropic.com>`
-2. **File Modifications:** Explicitly add a mention/comment indicating that the change was done by you (e.g., `Authored by Antigravity` or `Modified by Claude`) in docstrings or inline comments wherever required or whenever significant logic is changed.
+2. **File Modifications:** Explicitly add a mention/comment indicating that the change was done by you (e.g., `Authored by Google Gemini` or `Modified by Claude`) in docstrings or inline comments wherever required or whenever significant logic is changed.
