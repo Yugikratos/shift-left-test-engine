@@ -88,10 +88,11 @@ The system operates without an API key via rule-based pattern matching defined i
 
 ## Testing
 
-30 tests across 3 files:
+41 tests across 4 files:
 - `tests/test_pipeline.py` (15) — End-to-end pipeline, individual agents, input validation, edge cases
 - `tests/test_api.py` (5) — Health check, list tables, provision, 404 handling
 - `tests/test_parsers.py` (10) — DML/DDL parsing, field extraction, empty input handling
+- `tests/test_gemini_features.py` (11) — Retry logic, skip flag validation, persistent job storage
 
 GitHub Actions CI runs on every push/PR to `main` (`.github/workflows/test.yml`).
 
@@ -108,5 +109,5 @@ Whenever an AI assistant (Google Gemini or Claude) makes changes to this reposit
 1. **Git Commits:** Always add the respective AI (or both) as co-authors to Git commit messages via Git trailers.
    Example: 
    `Co-authored-by: Google Gemini <noreply@google.com>`
-   `Co-authored-by: Claude <claude@anthropic.com>`
+   `Co-authored-by: Claude <noreply@anthropic.com>`
 2. **File Modifications:** Explicitly add a mention/comment indicating that the change was done by you (e.g., `Authored by Google Gemini` or `Modified by Claude`) in docstrings or inline comments wherever required or whenever significant logic is changed.
