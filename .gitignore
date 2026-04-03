@@ -21,6 +21,11 @@ extracted_data/*.csv
 knowledge_base/profiles/*.json
 logs/
 
+# Test / coverage output
+.coverage
+test_results*.txt
+coverage_results.txt
+
 # Claude Code local settings
 .claude/
 
