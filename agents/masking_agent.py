@@ -65,7 +65,12 @@ class MaskingAgent(BaseAgent):
             return AgentResult(
                 agent_name=self.name,
                 status=AgentStatus.COMPLETED if exe_res["exit_code"] == 0 else AgentStatus.FAILED,
-                data={"tables_processed": len(extracted_data), "masking_method": "enterprise_xfr_generation", "script": str(script_path)},
+                data={
+                    "tables_processed": len(extracted_data), 
+                    "masking_method": "enterprise_xfr_generation", 
+                    "script": str(script_path),
+                    "masked_data": extracted_data # Pass schema down the chain
+                },
                 summary=f"Enterprise Mode: Generated and triggered Ab Initio XFR via SSH."
             )
 
