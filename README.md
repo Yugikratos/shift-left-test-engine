@@ -32,19 +32,19 @@ Submit a test data request → The system automatically:
 ### Python Libraries
 | Package | Version | Purpose |
 |---|---|---|
-| **fastapi** | 0.135.2 | REST API framework — async, auto-generates `/docs` Swagger UI |
-| **uvicorn** | 0.42.0 | ASGI server that runs FastAPI |
-| **pydantic** | 2.12.5 | Request/response validation, typed settings management |
-| **python-dotenv** | 1.2.2 | Loads `.env` file into environment variables at startup |
+| **fastapi** | 0.115.0 | REST API framework — async, auto-generates `/docs` Swagger UI |
+| **uvicorn** | 0.30.6 | ASGI server that runs FastAPI |
+| **pydantic** | 2.9.0 | Request/response validation, typed settings management |
+| **python-dotenv** | 1.0.1 | Loads `.env` file into environment variables at startup |
 | **anthropic** | 0.86.0 | Official Claude API client — used by ProfilingAgent in LLM mode |
-| **pandas** | 3.0.1 | DataFrame operations for data extraction, transformation, and CSV export |
-| **faker** | 40.11.1 | Generates realistic synthetic data for seeding DBs and PII masking |
+| **pandas** | 2.2.2 | DataFrame operations for data extraction, transformation, and CSV export |
+| **faker** | 28.4.1 | Generates realistic synthetic data for seeding DBs and PII masking |
 | **sqlalchemy** | 2.0.48 | ORM and DB abstraction layer — used for SQLite in POC |
 | **boto3** | 1.35.0 | AWS SDK — used for Bedrock LLM provider (optional) |
 | **paramiko** | 3.5.0 | SSH client — used for enterprise remote execution (optional) |
-| **rich** | 14.3.3 | Pretty terminal output — tables, colors, progress in CLI demo |
-| **loguru** | 0.7.3 | Structured logging with automatic file rotation |
-| **httpx** | 0.28.1 | Async HTTP client used internally and for API integration tests |
+| **rich** | 13.8.0 | Pretty terminal output — tables, colors, progress in CLI demo |
+| **loguru** | 0.7.2 | Structured logging with automatic file rotation |
+| **httpx** | 0.27.2 | Async HTTP client used internally and for API integration tests |
 | **pytest** | 8.3.3 | Test framework — runs smoke tests and unit tests |
 
 ### Dev Tools
@@ -87,7 +87,7 @@ venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 
 # If on Python 3.14 (avoids C-extension build failures)
-pip install fastapi uvicorn pydantic python-dotenv anthropic pandas faker sqlalchemy rich loguru httpx --prefer-binary
+pip install fastapi uvicorn pydantic python-dotenv anthropic pandas faker sqlalchemy boto3 paramiko rich loguru httpx --prefer-binary
 ```
 
 ### Step 3: Configure API Key (Optional)
@@ -121,7 +121,10 @@ Starts a REST API server. Use Swagger UI at `/docs` to submit requests interacti
 
 ### Step 6: Submit a Test Data Request via API
 ```powershell
-# Submit request
+# List available tables
+curl http://localhost:8000/api/v1/tables
+
+# Submit request (synchronous — waits for pipeline completion)
 curl -X POST http://localhost:8000/api/v1/provision `
   -H "Content-Type: application/json" `
   -d '{\"scenario\": \"business_entity_flow\", \"tables\": [\"stg_business_entity\", \"business_address_match\", \"business_credit_score\"], \"record_count\": 100, \"date_range\": {\"start\": \"2024-01-01\", \"end\": \"2024-12-31\"}}'
@@ -152,7 +155,9 @@ python -m pytest tests/
 | `python -m uvicorn api.main:app --port 8000` | Starts REST API server on port 8000 |
 | `python -m uvicorn api.main:app --reload --port 8000` | Starts server with auto-reload on file changes (dev mode) |
 | `python -m pytest tests/` | Runs all unit and integration tests |
-| `curl -X POST http://localhost:8000/api/v1/provision ...` | Submits a test data provisioning request |
+| `curl http://localhost:8000/api/v1/health` | Health check — returns LLM mode, DB status |
+| `curl http://localhost:8000/api/v1/tables` | Lists available tables in source database |
+| `curl -X POST http://localhost:8000/api/v1/provision ...` | Submits and runs a provisioning request (synchronous) |
 | `curl http://localhost:8000/api/v1/status/<id>` | Polls status of a provisioning request |
 | `curl http://localhost:8000/api/v1/results/<id>` | Retrieves full results of a completed request |
 
@@ -166,15 +171,15 @@ shift-left-test-engine/
 │   ├── base_agent.py           # Abstract base — all agents inherit from this
 │   ├── profiling_agent.py      # Parses DML/DDL, detects PII, maps relationships
 │   ├── subsetting_agent.py     # Generates anchor-based SQL, extracts data slice
-│   ├── masking_agent.py        # Type-aware PII anonymization using Faker
-│   └── provisioning_agent.py   # Loads masked data to target DB, runs validation
+│   ├── masking_agent.py        # Type-aware PII anonymization using Faker (or XFR in enterprise)
+│   └── provisioning_agent.py   # Loads masked data to target DB (or BTEQ in enterprise)
 ├── orchestrator/
 │   ├── engine.py               # OrchestratorEngine — validates requests, runs pipeline
 │   ├── coordinator.py          # AgentCoordinator — task assignment and progress tracking
 │   ├── status.py               # StatusTracker — request lifecycle tracking
 │   └── demo.py                 # CLI demo runner (no server required)
 ├── api/
-│   └── main.py                 # FastAPI REST endpoints + in-memory request store
+│   └── main.py                 # FastAPI REST endpoints (6 routes) + lifespan startup
 ├── parsers/
 │   ├── dml_parser.py           # Ab Initio DML format parser
 │   └── ddl_parser.py           # Teradata DDL parser
@@ -183,14 +188,16 @@ shift-left-test-engine/
 ├── utils/
 │   ├── db_setup.py             # Creates + seeds source_data.db (~690 mock records)
 │   ├── llm_client.py           # LLM client (Anthropic/Bedrock) — returns None if unavailable
-│   ├── logger.py               # Loguru logger configuration
+│   ├── logger.py               # Loguru logger with rotating file output
 │   └── remote_executor.py      # SSH remote executor (mock/real) for enterprise mode
 ├── knowledge_base/
 │   └── profiles/               # JSON profile reports saved after each run
 ├── mock_data/
-│   ├── dml/                    # Sample Ab Initio DML files
-│   └── ddl/                    # Sample Teradata DDL files
+│   ├── dml/                    # Ab Initio DML files (5 schemas)
+│   └── ddl/                    # Teradata DDL files (4 tables)
 ├── extracted_data/             # CSVs output by SubsettingAgent
+├── generated_scripts/          # XFR/BTEQ scripts output by enterprise mode
+├── logs/                       # Loguru rotating logs (engine_{date}.log)
 ├── tests/
 │   ├── test_pipeline.py        # Pipeline + agent tests (15 tests)
 │   ├── test_api.py             # API endpoint tests (5 tests)
@@ -198,11 +205,13 @@ shift-left-test-engine/
 │   └── test_engine_features.py # Enterprise, retry, skip flags, persistence (18 tests)
 ├── source_data.db              # SQLite source DB (mock production data)
 ├── target_test.db              # SQLite target DB (provisioned test data)
+├── metadata.db                 # SQLite persistent job store (survives restarts)
 ├── .env                        # Local config (ANTHROPIC_API_KEY — gitignored)
 ├── .env.example                # Template for .env
 ├── .github/workflows/test.yml  # GitHub Actions CI pipeline
+├── CHANGELOG.md                # Project changelog
 ├── requirements.txt            # Pinned Python dependencies
-└── Dockerfile                  # Container definition
+└── Dockerfile                  # Container definition (Python 3.12)
 ```
 
 ---
@@ -233,6 +242,17 @@ shift-left-test-engine/
    └── Validation Report (returned via API or printed to terminal)
 ```
 
+### API Endpoints
+
+| Method | Route | Description |
+|--------|-------|-------------|
+| **GET** | `/api/v1/health` | Health check — returns LLM mode, database status |
+| **GET** | `/api/v1/tables` | List available tables in source database |
+| **POST** | `/api/v1/provision` | Submit and execute pipeline (synchronous) |
+| **POST** | `/api/v1/provision/async` | Submit request and get receipt (async stub) |
+| **GET** | `/api/v1/status/{request_id}` | Get pipeline execution status |
+| **GET** | `/api/v1/results/{request_id}` | Get full results of a completed request |
+
 **Agent communication:** A single mutable `context` dict flows through all agents. Each agent reads its inputs and writes its outputs into the same dict. Agents never call each other directly.
 
 **Key context keys:**
@@ -240,6 +260,25 @@ shift-left-test-engine/
 - After Subsetting: `context["extracted_data"]`
 - After Masking: `context["masked_data"]`
 - Provisioning reads all of the above
+
+---
+
+## Environment Variables
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `ANTHROPIC_API_KEY` | `""` | Claude API key (optional — system works without it) |
+| `LLM_PROVIDER` | `ANTHROPIC` | LLM provider: `ANTHROPIC` or `BEDROCK` |
+| `LLM_MODEL` | `claude-sonnet-4-20250514` | Claude model to use |
+| `ENTERPRISE_MODE` | `false` | Enable XFR/BTEQ script generation + SSH execution |
+| `AWS_DEFAULT_REGION` | — | AWS region for Bedrock (required if `LLM_PROVIDER=BEDROCK`) |
+| `ETL_SSH_HOST` | `rhel-etl-prod.internal` | Ab Initio server hostname (enterprise mode) |
+| `ETL_SSH_USER` | `ab_svc` | Ab Initio SSH user (enterprise mode) |
+| `TD_SSH_HOST` | `td-etl-prod.internal` | Teradata server hostname (enterprise mode) |
+| `TD_SSH_USER` | `td_svc` | Teradata SSH user (enterprise mode) |
+| `LOG_LEVEL` | `INFO` | Logging level (`DEBUG`, `INFO`, `WARNING`, `ERROR`) |
+| `DATABASE_URL` | `sqlite:///./test_data_engine.db` | Source DB connection string |
+| `TARGET_DB_URL` | `sqlite:///./target_test.db` | Target DB connection string |
 
 ---
 
@@ -267,6 +306,8 @@ shift-left-test-engine/
 - Scripts are executed remotely via SSH (`RemoteExecutor` — mock by default)
 - Configure remote hosts via `ETL_SSH_HOST`, `ETL_SSH_USER`, `TD_SSH_HOST`, `TD_SSH_USER`
 - Pipeline steps can be skipped with `skip_profiling`, `skip_subsetting`, `skip_masking`, `skip_provisioning` flags
+- Skip validation enforces dependency chains (e.g., cannot skip subsetting without also skipping masking)
+- Job state is persisted to `metadata.db` (SQLite) — jobs survive API restarts
 
 ---
 
