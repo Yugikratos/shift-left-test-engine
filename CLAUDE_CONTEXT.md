@@ -51,7 +51,8 @@ python -m pytest tests/ -v
 | rich | 14.3.3 | Terminal output formatting |
 | loguru | 0.7.3 | Structured logging |
 | httpx | 0.28.1 | HTTP client (API testing) |
-| pytest | 8.3.3 | Test framework |
+| pytest | 9.0.2 | Test framework |
+| pytest-cov | 7.1.0 | Test coverage reporting |
 
 > **Note:** Install with `pip install <package> --prefer-binary` on Python 3.14 to avoid build failures.
 
@@ -99,7 +100,7 @@ shift-left-test-engine/
 │   ├── dml_parser.py           # Ab Initio DML format parser
 │   └── ddl_parser.py           # Teradata DDL parser
 ├── utils/
-│   ├── db_setup.py             # Seeds source_data.db with ~690 mock records
+│   ├── db_setup.py             # Seeds source_data.db with ~780 mock records (5 tables)
 │   ├── llm_client.py           # LLM client (Anthropic/Bedrock) with graceful fallback
 │   ├── logger.py               # Loguru logger with console + file rotation
 │   └── remote_executor.py      # SSH remote executor (mock/real) for enterprise mode

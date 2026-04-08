@@ -87,7 +87,7 @@ venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 
 # If on Python 3.14 (avoids C-extension build failures)
-pip install fastapi uvicorn pydantic python-dotenv anthropic pandas faker sqlalchemy boto3 paramiko rich loguru httpx --prefer-binary
+pip install fastapi uvicorn pydantic python-dotenv anthropic pandas faker sqlalchemy boto3 paramiko rich loguru httpx pytest pytest-cov --prefer-binary
 ```
 
 ### Step 3: Configure API Key (Optional)
@@ -102,7 +102,7 @@ copy .env.example .env
 ```powershell
 python -m utils.db_setup
 ```
-**What this does:** Creates `source_data.db` (SQLite) with 3 tables and ~690 rows of Faker-generated mock records. Also creates an empty `target_test.db` for provisioning output.
+**What this does:** Creates `source_data.db` (SQLite) with 5 tables and ~780 rows of Faker-generated mock records (3 business tables + 2 ETL control tables). Also creates an empty `target_test.db` for provisioning output.
 
 ### Step 5: Run the Engine
 
@@ -186,7 +186,7 @@ shift-left-test-engine/
 ├── config/
 │   └── settings.py             # Env var loading, PII/relationship detection patterns
 ├── utils/
-│   ├── db_setup.py             # Creates + seeds source_data.db (~690 mock records)
+│   ├── db_setup.py             # Creates + seeds source_data.db (~780 mock records)
 │   ├── llm_client.py           # LLM client (Anthropic/Bedrock) — returns None if unavailable
 │   ├── logger.py               # Loguru logger with rotating file output
 │   └── remote_executor.py      # SSH remote executor (mock/real) for enterprise mode
@@ -279,6 +279,12 @@ shift-left-test-engine/
 | `LOG_LEVEL` | `INFO` | Logging level (`DEBUG`, `INFO`, `WARNING`, `ERROR`) |
 | `DATABASE_URL` | `sqlite:///./test_data_engine.db` | Source DB connection string |
 | `TARGET_DB_URL` | `sqlite:///./target_test.db` | Target DB connection string |
+| `API_HOST` | `0.0.0.0` | API server bind address |
+| `API_PORT` | `8000` | API server port |
+| `MOCK_DATA_DIR` | `<project>/mock_data` | Path to mock DML/DDL data directory |
+| `KNOWLEDGE_BASE_DIR` | `<project>/knowledge_base` | Path to knowledge base / profile reports |
+| `DML_DIR` | `<MOCK_DATA_DIR>/dml` | Path to Ab Initio DML files |
+| `DDL_DIR` | `<MOCK_DATA_DIR>/ddl` | Path to Teradata DDL files |
 
 ---
 
@@ -326,8 +332,10 @@ Anonymizes PII fields with deterministic masking (same input always produces sam
 - `city`/`cty` fields → `fake.city()`
 - `state`/`st_abbr` fields → `fake.state_abbr()`
 - `zip`/`postal` fields → `fake.zipcode()`
-- `phone` fields → `555-XXXX` format
-- `id` fields → SHA-256 hash
+- `phone`/`tel` fields → `fake.phone_number()`
+- `email` fields → `fake.email()`
+- `ssn` fields → `fake.ssn()`
+- Other PII → `MASKED_????` (Faker lexify fallback)
 
 ### ProvisioningAgent
 Loads masked data into target SQLite DB with transaction safety (rollback on partial failure). Runs validation checks: row counts match, all expected columns exist, NOT NULL constraints satisfied. Returns pass/fail per check.

@@ -17,7 +17,7 @@ uvicorn api.main:app --reload --port 8000      # Start API server
 
 ## How to test
 ```bash
-python -m pytest tests/ -v                     # Run all 30 tests
+python -m pytest tests/ -v                     # Run all 48 tests
 python -m orchestrator.demo                    # Run full pipeline demo
 ```
 
@@ -69,7 +69,7 @@ API Request → OrchestratorEngine → Profiling → Subsetting → Masking → 
 
 - **ProfilingAgent** — Parses DML/DDL files, classifies fields (PII, Control, SCD-2, Key, Business), detects relationships via naming conventions, optionally uses Claude for deeper analysis. Saves profile to `knowledge_base/profiles/`.
 - **SubsettingAgent** — Generates referentially-intact SQL using anchor table strategy with IN-subquery joins. Validates FK integrity. Saves CSVs to `extracted_data/`.
-- **MaskingAgent** — Anonymizes PII with consistent masking (same input → same output via hash-keyed cache). Uses Faker for type-specific output: names→`fake.name()`, addresses→`fake.street_address()`, cities→`fake.city()`, states→`fake.state_abbr()`, zips→`fake.zipcode()`, phones→`555-XXXX`, IDs→SHA-256 hash. Pattern-based detection only (Presidio removed).
+- **MaskingAgent** — Anonymizes PII with consistent masking (same input → same output via hash-keyed cache). Uses Faker for type-specific output: names→`fake.name()`, addresses→`fake.street_address()`, cities→`fake.city()`, states→`fake.state_abbr()`, zips→`fake.zipcode()`, phones→`fake.phone_number()`, emails→`fake.email()`, SSNs→`fake.ssn()`, other PII→`MASKED_????` (Faker lexify fallback). Pattern-based detection only (Presidio removed).
 - **ProvisioningAgent** — Loads masked data into target SQLite DB with transaction safety (rollback on partial failure). Runs validation checks (row counts, column existence, NOT NULL constraints).
 
 ### Key Modules
