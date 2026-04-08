@@ -202,7 +202,8 @@ shift-left-test-engine/
 │   ├── test_pipeline.py        # Pipeline + agent tests (15 tests)
 │   ├── test_api.py             # API endpoint tests (5 tests)
 │   ├── test_parsers.py         # DML/DDL parser tests (10 tests)
-│   └── test_engine_features.py # Enterprise, retry, skip flags, persistence (18 tests)
+│   ├── test_engine_features.py # Enterprise, retry, skip flags, persistence (18 tests)
+│   └── test_coordinator_status.py # Coordinator + status tracker (14 tests)
 ├── source_data.db              # SQLite source DB (mock production data)
 ├── target_test.db              # SQLite target DB (provisioned test data)
 ├── metadata.db                 # SQLite persistent job store (survives restarts)
@@ -365,7 +366,7 @@ GitHub Actions runs automatically on every push to `main`:
 2. Installs dependencies from `requirements.txt`
 3. Seeds the SQLite databases (`python -m utils.db_setup`)
 4. Runs the full 4-agent pipeline demo (`python -m orchestrator.demo`)
-5. Runs pytest — **48 tests** across pipeline, API, parsers, and enterprise features (`python -m pytest tests/ -v`)
+5. Runs pytest — **62 tests** across pipeline, API, parsers, enterprise features, and coordinator/status (`python -m pytest tests/ -v`)
 
 Workflow file: [`.github/workflows/test.yml`](.github/workflows/test.yml)
 
@@ -376,6 +377,7 @@ Workflow file: [`.github/workflows/test.yml`](.github/workflows/test.yml)
 | `test_api.py` | 5 | Health check, list tables, provision, 404 handling |
 | `test_parsers.py` | 10 | DML/DDL parsing, field extraction, empty input handling |
 | `test_engine_features.py` | 18 | Retry logic, skip flags, persistent storage, enterprise XFR/BTEQ generation, RemoteExecutor, Bedrock fallback |
+| `test_coordinator_status.py` | 14 | AgentCoordinator task assignment/progress/reset, StatusTracker lifecycle/summary/errors |
 
 ---
 

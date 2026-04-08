@@ -7,7 +7,7 @@ Goal: Demonstrate the 4-agent pipeline works end-to-end.
 
 ## Current Status
 - Phase 1 (Fix POC bugs): COMPLETE
-- Phase 1.5 (Code quality, CI, tests): COMPLETE — 48 tests, GitHub Actions CI, hardened DB handling
+- Phase 1.5 (Code quality, CI, tests): COMPLETE — 62 tests, GitHub Actions CI, hardened DB handling
 - Phase 2 (Map to real stack): IN PROGRESS — Enterprise mode, Bedrock, SSH execution, XFR/BTEQ generation done
 
 ## Working Commands
@@ -25,7 +25,7 @@ python -m orchestrator.demo
 python -m uvicorn api.main:app --port 8000
 # Then open: http://127.0.0.1:8000/docs
 
-# Run tests (48 tests)
+# Run tests (62 tests)
 python -m pytest tests/ -v
 ```
 
@@ -110,7 +110,8 @@ shift-left-test-engine/
 │   ├── test_pipeline.py        # Pipeline + agent tests (15 tests)
 │   ├── test_api.py             # API endpoint tests (5 tests)
 │   ├── test_parsers.py         # DML/DDL parser tests (10 tests)
-│   └── test_engine_features.py # Retry, skip flags, persistence, enterprise mode (18 tests)
+│   ├── test_engine_features.py # Retry, skip flags, persistence, enterprise mode (18 tests)
+│   └── test_coordinator_status.py # Coordinator + status tracker (14 tests)
 ├── knowledge_base/
 │   └── profiles/               # JSON reports saved after each run
 ├── mock_data/

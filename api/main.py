@@ -15,7 +15,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
@@ -23,6 +23,9 @@ from config.settings import KNOWLEDGE_BASE_DIR
 from orchestrator.engine import OrchestratorEngine
 from utils.db_setup import setup_all, SOURCE_DB_PATH
 from utils.llm_client import llm_client
+from utils.logger import get_logger
+
+log = get_logger("api")
 
 
 # ── Lifespan ──────────────────────────────────────────
@@ -112,9 +115,20 @@ async def provision(request: ProvisionRequest):
 
 
 @app.post("/api/v1/provision/async")
-async def provision_async(request: ProvisionRequest):
-    """Submit a request and get a receipt (for future async implementation)."""
+async def provision_async(request: ProvisionRequest, background_tasks: BackgroundTasks):
+    """Submit a request for async execution and get a receipt immediately.
+
+    The pipeline runs in the background. Poll /api/v1/status/{request_id} for progress.
+    """
     receipt = engine.submit_request(request.model_dump())
+
+    def _run_pipeline(request_id: str):
+        try:
+            engine.execute_request(request_id)
+        except Exception as e:
+            log.error(f"Background pipeline failed for {request_id}: {e}")
+
+    background_tasks.add_task(_run_pipeline, receipt["request_id"])
     return receipt
 
 

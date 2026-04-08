@@ -11,6 +11,10 @@ import re
 from pathlib import Path
 from dataclasses import dataclass, field
 
+from utils.logger import get_logger
+
+log = get_logger("dml_parser")
+
 
 @dataclass
 class DMLField:
@@ -365,7 +369,7 @@ def parse_all_dmls(dml_dir: str | Path) -> list[DMLSchema]:
             schema = parser.parse_file(dml_file)
             schemas.append(schema)
         except Exception as e:
-            print(f"  Warning: Failed to parse {dml_file.name}: {e}")
+            log.warning(f"Failed to parse {dml_file.name}: {e}")
 
     return schemas
 

@@ -17,7 +17,7 @@ uvicorn api.main:app --reload --port 8000      # Start API server
 
 ## How to test
 ```bash
-python -m pytest tests/ -v                     # Run all 48 tests
+python -m pytest tests/ -v                     # Run all 62 tests
 python -m orchestrator.demo                    # Run full pipeline demo
 ```
 
@@ -88,11 +88,12 @@ The system operates without an API key via rule-based pattern matching defined i
 
 ## Testing
 
-48 tests across 4 files:
+62 tests across 5 files:
 - `tests/test_pipeline.py` (15) — End-to-end pipeline, individual agents, input validation, edge cases
 - `tests/test_api.py` (5) — Health check, list tables, provision, 404 handling
 - `tests/test_parsers.py` (10) — DML/DDL parsing, field extraction, empty input handling
 - `tests/test_engine_features.py` (18) — Retry logic, skip flags, persistent storage, enterprise mode, RemoteExecutor, Bedrock fallback
+- `tests/test_coordinator_status.py` (14) — AgentCoordinator task assignment/progress/reset, StatusTracker lifecycle/summary/errors
 
 GitHub Actions CI runs on every push/PR to `main` (`.github/workflows/test.yml`).
 

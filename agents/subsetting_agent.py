@@ -4,6 +4,7 @@ Takes the profiling report and produces SQL queries that extract a small
 dataset while preserving foreign key relationships across tables.
 """
 
+import re
 import sqlite3
 import csv
 from pathlib import Path
@@ -17,6 +18,13 @@ class SubsettingAgent(BaseAgent):
 
     def __init__(self):
         super().__init__("Smart Subsetting Agent")
+
+    @staticmethod
+    def _sanitize_identifier(name: str) -> str:
+        """Validate that a SQL identifier contains only safe characters."""
+        if not re.match(r"^\w+$", name):
+            raise ValueError(f"Invalid SQL identifier: {name!r}")
+        return name
 
     def execute(self, context: dict) -> AgentResult:
         """Execute subsetting based on profile report.
@@ -134,6 +142,7 @@ class SubsettingAgent(BaseAgent):
 
     def _find_date_column(self, table: str, source_db: str) -> str | None:
         """Find a valid date column in the table by checking against known patterns."""
+        table = self._sanitize_identifier(table)
         date_candidates = ["bus_cyc_dt", "eff_strt_dt", "eff_sdt", "etl_cyc_dt"]
         try:
             with sqlite3.connect(source_db) as conn:
@@ -150,6 +159,7 @@ class SubsettingAgent(BaseAgent):
                           record_count: int, date_range: dict) -> dict:
         """Generate subsetting SQL queries maintaining referential integrity."""
         queries = {}
+        anchor = self._sanitize_identifier(anchor)
 
         # Anchor table: direct subset with LIMIT
         anchor_where = []
@@ -160,11 +170,11 @@ class SubsettingAgent(BaseAgent):
         date_col = self._find_date_column(anchor, source_db)
 
         if date_col and date_range.get("start"):
-            anchor_where.append(f"{date_col} >= ?")
+            anchor_where.append(f"{self._sanitize_identifier(date_col)} >= ?")
             anchor_params.append(date_range["start"])
 
         if date_col and date_range.get("end"):
-            anchor_where.append(f"{date_col} <= ?")
+            anchor_where.append(f"{self._sanitize_identifier(date_col)} <= ?")
             anchor_params.append(date_range["end"])
 
         where_clause = f" WHERE {' AND '.join(anchor_where)}" if anchor_where else ""
@@ -176,12 +186,13 @@ class SubsettingAgent(BaseAgent):
 
         # Related tables: join back to anchor's key values
         for table_name in order[1:]:
+            table_name = self._sanitize_identifier(table_name)
             rel = self._find_relationship(table_name, anchor, relationships)
             if rel:
                 # Subset via IN (subquery)
                 from_table = rel["from_table"]
-                from_col = rel["from_col"]
-                to_col = rel["to_col"]
+                from_col = self._sanitize_identifier(rel["from_col"])
+                to_col = self._sanitize_identifier(rel["to_col"])
 
                 queries[table_name] = {
                     "sql": (

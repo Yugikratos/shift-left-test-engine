@@ -8,6 +8,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Orchestrator:** Wired up `AgentCoordinator` and `StatusTracker` into `OrchestratorEngine` — agents now run through the coordinator with task logging, and request lifecycle is tracked in-memory via the status tracker. (Modified by Claude)
+- **API:** `POST /api/v1/provision/async` now actually runs the pipeline in the background via FastAPI `BackgroundTasks`. Poll `/api/v1/status/{id}` for progress. (Modified by Claude)
+- **Tests:** Added `tests/test_coordinator_status.py` with 14 tests covering `AgentCoordinator` (assign, progress, task log, reset) and `StatusTracker` (register, lifecycle, summary, errors). Total tests: 62. (Modified by Claude)
+
+### Changed
+- **Masking:** `MaskingAgent._detect_pii_type()` now includes `PII_ID_PATTERNS` (`tax_id`, `ein`, `passport`) in fallback detection — previously these columns could bypass masking entirely. (Modified by Claude)
+- **Subsetting:** Added `_sanitize_identifier()` to `SubsettingAgent` — validates all table and column names against `^\w+$` before SQL interpolation to prevent injection. (Modified by Claude)
+- **Parsers:** Replaced `print()` warnings in `dml_parser.py` and `ddl_parser.py` with structured `loguru` logging. (Modified by Claude)
+- **Deps:** Updated `requirements.txt` to match installed versions (fastapi 0.135.2, uvicorn 0.42.0, pydantic 2.12.5, pandas 3.0.1, faker 40.11.1, rich 14.3.3, loguru 0.7.3, httpx 0.28.1, pytest 9.0.2). Added `pytest-cov==7.1.0`. (Modified by Claude)
+
+### Fixed
+- **db_setup:** Corrected seed count print from ~690 to ~780 (was missing 90 `etl_src_ctl` records). (Modified by Claude)
+
+### Previously Added
 - **Enterprise Mode:** Implemented `ENTERPRISE_MODE` toggle in `config/settings.py` to bypass local execution. (Authored by Google Gemini)
 - **Code Generation:** `MaskingAgent` now generates Ab Initio `.XFR` transform scripts natively when in Enterprise Mode. (Authored by Google Gemini)
 - **Code Generation:** `ProvisioningAgent` now generates Teradata `.BTEQ` load scripts natively when in Enterprise Mode. (Authored by Google Gemini)

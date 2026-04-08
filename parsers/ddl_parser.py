@@ -10,6 +10,10 @@ import re
 from pathlib import Path
 from dataclasses import dataclass, field
 
+from utils.logger import get_logger
+
+log = get_logger("ddl_parser")
+
 
 @dataclass
 class DDLColumn:
@@ -293,7 +297,7 @@ def parse_all_ddls(ddl_dir: str | Path) -> list[DDLTable]:
             parsed = parser.parse_file(ddl_file)
             tables.extend(parsed)
         except Exception as e:
-            print(f"  Warning: Failed to parse {ddl_file.name}: {e}")
+            log.warning(f"Failed to parse {ddl_file.name}: {e}")
 
     return tables
 

@@ -16,6 +16,8 @@ from agents.subsetting_agent import SubsettingAgent
 from agents.masking_agent import MaskingAgent
 from agents.provisioning_agent import ProvisioningAgent
 from config.settings import BASE_DIR, KNOWLEDGE_BASE_DIR
+from orchestrator.coordinator import AgentCoordinator
+from orchestrator.status import StatusTracker
 from utils.llm_client import llm_client
 from utils.logger import get_logger
 
@@ -32,6 +34,8 @@ class OrchestratorEngine:
             "masking": MaskingAgent(),
             "provisioning": ProvisioningAgent(),
         }
+        self.coordinator = AgentCoordinator(self.agents)
+        self.status_tracker = StatusTracker()
         self.db_path = BASE_DIR / "metadata.db"
         self._init_db()
 
@@ -128,6 +132,7 @@ class OrchestratorEngine:
             "agent_results": {},
         }
         self._save_job(req)
+        self.status_tracker.register(request_id, req)
 
         return {
             "request_id": request_id,
@@ -148,6 +153,8 @@ class OrchestratorEngine:
         req["status"] = "running"
         req["started_at"] = datetime.now().isoformat()
         self._save_job(req)
+        self.coordinator.reset()
+        self.status_tracker.mark_running(request_id)
 
         context = {
             "request_id": request_id,
@@ -170,15 +177,21 @@ class OrchestratorEngine:
         # ── Step 1: Profiling ──
         if not req.get("skip_profiling"):
             log.info("[1/4] Running Data Profiling Agent...")
-            profile_result = self.agents["profiling"].run(context)
+            self.status_tracker.update_agent_status(request_id, "profiling", "running")
+            profile_result = self.coordinator.assign("profiling", context)
             req["agent_results"]["profiling"] = profile_result.to_dict()
+            self.status_tracker.update_agent_status(
+                request_id, "profiling", profile_result.status.value,
+                summary=profile_result.summary, duration_seconds=profile_result.duration_seconds,
+            )
             log.info(f"→ {profile_result.summary}")
-            
+
             if profile_result.status == AgentStatus.FAILED:
                 req["status"] = "failed"
                 self._save_job(req)
+                self.status_tracker.mark_completed(request_id, "failed")
                 return self._build_report(req)
-                
+
             context["profile_report"] = profile_result.data
             context["pii_summary"] = profile_result.data.get("pii_summary", {})
         else:
@@ -189,13 +202,19 @@ class OrchestratorEngine:
         # ── Step 2: Subsetting ──
         if not req.get("skip_subsetting"):
             log.info("[2/4] Running Smart Subsetting Agent...")
-            subset_result = self.agents["subsetting"].run(context)
+            self.status_tracker.update_agent_status(request_id, "subsetting", "running")
+            subset_result = self.coordinator.assign("subsetting", context)
             req["agent_results"]["subsetting"] = subset_result.to_dict()
+            self.status_tracker.update_agent_status(
+                request_id, "subsetting", subset_result.status.value,
+                summary=subset_result.summary, duration_seconds=subset_result.duration_seconds,
+            )
             log.info(f"→ {subset_result.summary}")
 
             if subset_result.status == AgentStatus.FAILED:
                 req["status"] = "failed"
                 self._save_job(req)
+                self.status_tracker.mark_completed(request_id, "failed")
                 return self._build_report(req)
 
             context["extracted_data"] = subset_result.data.get("extracted_data", {})
@@ -207,13 +226,19 @@ class OrchestratorEngine:
         # ── Step 3: Masking ──
         if not req.get("skip_masking"):
             log.info("[3/4] Running Data Masking Agent...")
-            mask_result = self.agents["masking"].run(context)
+            self.status_tracker.update_agent_status(request_id, "masking", "running")
+            mask_result = self.coordinator.assign("masking", context)
             req["agent_results"]["masking"] = mask_result.to_dict()
+            self.status_tracker.update_agent_status(
+                request_id, "masking", mask_result.status.value,
+                summary=mask_result.summary, duration_seconds=mask_result.duration_seconds,
+            )
             log.info(f"→ {mask_result.summary}")
 
             if mask_result.status == AgentStatus.FAILED:
                 req["status"] = "failed"
                 self._save_job(req)
+                self.status_tracker.mark_completed(request_id, "failed")
                 return self._build_report(req)
 
             context["masked_data"] = mask_result.data.get("masked_data", {})
@@ -225,8 +250,13 @@ class OrchestratorEngine:
         # ── Step 4: Provisioning ──
         if not req.get("skip_provisioning"):
             log.info("[4/4] Running Data Provisioning Agent...")
-            prov_result = self.agents["provisioning"].run(context)
+            self.status_tracker.update_agent_status(request_id, "provisioning", "running")
+            prov_result = self.coordinator.assign("provisioning", context)
             req["agent_results"]["provisioning"] = prov_result.to_dict()
+            self.status_tracker.update_agent_status(
+                request_id, "provisioning", prov_result.status.value,
+                summary=prov_result.summary, duration_seconds=prov_result.duration_seconds,
+            )
             log.info(f"→ {prov_result.summary}")
             if prov_result.status != AgentStatus.COMPLETED:
                 status_flag = "partial"
@@ -237,6 +267,7 @@ class OrchestratorEngine:
         req["status"] = status_flag
         req["completed_at"] = datetime.now().isoformat()
         self._save_job(req)
+        self.status_tracker.mark_completed(request_id, status_flag)
 
         report = self._build_report(req)
         self._save_report(request_id, report)
@@ -250,7 +281,14 @@ class OrchestratorEngine:
         return self.execute_request(receipt["request_id"])
 
     def get_status(self, request_id: str) -> dict:
-        """Get current status of a request."""
+        """Get current status of a request.
+
+        Tries in-memory status tracker first (fast), falls back to metadata.db.
+        """
+        tracked = self.status_tracker.get_summary(request_id)
+        if "error" not in tracked:
+            return tracked
+
         req = self._get_job(request_id)
         if not req:
             return {"error": f"Request {request_id} not found"}
@@ -308,6 +346,7 @@ class OrchestratorEngine:
                 }
                 for name, result in agent_results.items()
             },
+            "task_log": self.coordinator.get_task_log(),
             "detailed_data": {
                 "profile": profile_data,
                 "subsetting": subset_data,

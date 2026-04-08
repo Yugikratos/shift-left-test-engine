@@ -20,7 +20,7 @@ from collections import defaultdict
 from faker import Faker
 
 from agents.base_agent import BaseAgent, AgentResult, AgentStatus
-from config.settings import PII_NAME_PATTERNS, PII_ADDRESS_PATTERNS, PII_PHONE_PATTERNS, ENTERPRISE_MODE, BASE_DIR, ETL_SSH_HOST, ETL_SSH_USER
+from config.settings import PII_NAME_PATTERNS, PII_ADDRESS_PATTERNS, PII_PHONE_PATTERNS, PII_ID_PATTERNS, ENTERPRISE_MODE, BASE_DIR, ETL_SSH_HOST, ETL_SSH_USER
 from utils.remote_executor import RemoteExecutor
 
 
@@ -226,7 +226,7 @@ class MaskingAgent(BaseAgent):
 
         # Fall back to config patterns for any other PII not covered above
         name = column_name.lower()
-        for p in PII_NAME_PATTERNS + PII_ADDRESS_PATTERNS + PII_PHONE_PATTERNS:
+        for p in PII_NAME_PATTERNS + PII_ADDRESS_PATTERNS + PII_PHONE_PATTERNS + PII_ID_PATTERNS:
             if p in name:
                 return "GENERIC_PII"
         return None

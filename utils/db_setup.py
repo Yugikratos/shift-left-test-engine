@@ -335,7 +335,7 @@ def seed_source_data(db_path: Path, num_businesses: int = 200):
     conn.commit()
     conn.close()
     print(f"  Source database created: {db_path}")
-    print(f"  Total records: ~{num_businesses * 3 + 90}")
+    print(f"  Total records: ~{num_businesses * 3 + 180}")
 
 
 def create_target_db(db_path: Path):
