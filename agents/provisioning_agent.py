@@ -102,10 +102,10 @@ class ProvisioningAgent(BaseAgent):
 
                     # Step 1: Clear existing data in target table
                     with target_engine.begin() as conn:
-                        conn.execute(text(f"DELETE FROM {table_name}"))
+                        conn.execute(text(f"DELETE FROM {table_name.lower()}"))
 
                     # Step 2: Insert masked data
-                    df.to_sql(table_name, target_engine, if_exists="append", index=False)
+                    df.to_sql(table_name.lower(), target_engine, if_exists="append", index=False)
                     rows_loaded = len(df)
 
                     load_results[table_name] = {
@@ -181,7 +181,7 @@ class ProvisioningAgent(BaseAgent):
         with target_engine.connect() as conn:
             # Check 1: Row count
             try:
-                actual_count = conn.execute(text(f"SELECT COUNT(*) FROM {table_name}")).scalar()
+                actual_count = conn.execute(text(f"SELECT COUNT(*) FROM {table_name.lower()}")).scalar()
                 checks.append({
                     "check": "row_count",
                     "expected": expected_rows,
@@ -199,7 +199,7 @@ class ProvisioningAgent(BaseAgent):
             # Check 2: Column existence
             try:
                 inspector = inspect(target_engine)
-                actual_cols = [c["name"] for c in inspector.get_columns(table_name)]
+                actual_cols = [c["name"] for c in inspector.get_columns(table_name.lower())]
                 missing_cols = [c for c in expected_columns if c not in actual_cols]
                 checks.append({
                     "check": "column_existence",
@@ -217,7 +217,7 @@ class ProvisioningAgent(BaseAgent):
 
             # Check 3: No completely empty rows
             try:
-                sample = conn.execute(text(f"SELECT * FROM {table_name} LIMIT 1")).fetchone()
+                sample = conn.execute(text(f"SELECT * FROM {table_name.lower()} LIMIT 1")).fetchone()
                 has_data = sample is not None and any(v is not None for v in sample)
                 checks.append({
                     "check": "data_not_empty",
@@ -234,7 +234,7 @@ class ProvisioningAgent(BaseAgent):
             key_columns = self._identify_key_columns(expected_columns)
             for key_col in key_columns:
                 try:
-                    null_count = conn.execute(text(f"SELECT COUNT(*) FROM {table_name} WHERE {key_col} IS NULL OR {key_col} = ''")).scalar()
+                    null_count = conn.execute(text(f"SELECT COUNT(*) FROM {table_name.lower()} WHERE {key_col} IS NULL OR {key_col} = ''")).scalar()
                     checks.append({
                         "check": f"not_null_{key_col}",
                         "null_count": null_count,

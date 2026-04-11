@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **GitOps:** Configured declarative continuous deployment via `argocd-application.yaml`. (Authored by Google Gemini)
 - **Local Simulation:** Created `init_local_gitops.ps1` to locally mock the entire Enterprise release perimeter by booting Sonatype Nexus and natively installing ArgoCD to the local K8s cluster. (Authored by Google Gemini)
 - **CI/CD:** Extended GitHub Actions test workflow to securely build and push Docker images. Bypassed external credential firewalls to deploy strictly to the local simulated Nexus. (Authored by Google Gemini)
+
+### Fixed
+- **Provisioning Warnings:** Suppressed native Pandas `UserWarning` case-sensitivity SQLite table insertion spam by proactively lowering target tables prior to executing standard ORM `.to_sql()` operations. (Authored by Google Gemini)
+- **Terminal Crash:** Swapped strict Unicode dashboard console characters for UTF/ASCII compliant output formatting to prevent localized Windows encoding crashes. (Authored by Google Gemini)
 - **Object Storage:** Created `S3StorageClient` in `utils/storage_client.py` wrapping standard AWS `boto3` capabilities unconditionally to ensure Kubernetes stateless architecture compliance. (Authored by Google Gemini)
 - **Database Pooling:** Added `utils/database.py` leveraging `sqlalchemy.engine` and `psycopg2` context managers for synchronous standard execution. (Authored by Google Gemini)
 

@@ -91,7 +91,7 @@ def run_demo():
         for table, fields in samples.items():
             print(f"\n  Table: {table}")
             for col, vals in list(fields.items())[:5]:
-                print(f"    {col:<25} {str(vals['before'])[:20]:<22} → {str(vals['after'])[:20]}")
+                print(f"    {col:<25} {str(vals['before'])[:20]:<22} -> {str(vals['after'])[:20]}")
 
     # Validation details
     prov_detail = report.get("detailed_data", {}).get("provisioning", {})
@@ -103,7 +103,7 @@ def run_demo():
               f"({validation.get('passed', 0)}/{validation.get('total_checks', 0)} checks passed)")
 
         for table_name, table_val in validation.get("by_table", {}).items():
-            status_icon = "✓" if table_val.get("passed") else "✗"
+            status_icon = "[PASS]" if table_val.get("passed") else "[FAIL]"
             print(f"    {status_icon} {table_name}: {table_val.get('total_checks', 0)} checks")
 
     print(f"\n{'='*60}")

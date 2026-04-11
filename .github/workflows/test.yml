@@ -50,12 +50,12 @@ jobs:
       # Removed external nexus login since we are mocking locally via port 5000
       # (Use act or manual local docker pushes matching this template for local tests)
 
-      - name: Build and push container to local Nexus
+      - name: Build container image (Push disabled on CI)
         uses: docker/build-push-action@v5
         with:
           context: .
           file: ./Dockerfile
-          push: true
+          push: false
           tags: |
             localhost:5000/shift-left-test-engine:${{ github.sha }}
             localhost:5000/shift-left-test-engine:latest
