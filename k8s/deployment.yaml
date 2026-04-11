@@ -27,9 +27,9 @@ spec:
         fsGroup: 1000
       containers:
         - name: fastapi-engine
-          # Using local image for desktop testing
-          image: shift-left-test-engine:local
-          imagePullPolicy: IfNotPresent
+          # Using local-nexus registry mapped out of docker-compose
+          image: localhost:5000/shift-left-test-engine:latest
+          imagePullPolicy: Always
           ports:
             - containerPort: 8000
               name: http

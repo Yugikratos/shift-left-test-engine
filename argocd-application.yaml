@@ -5,7 +5,7 @@ metadata:
   name: shift-left-test-engine
   namespace: argocd
   annotations:
-    argocd-image-updater.argoproj.io/image-list: engine=nexus.yourcompany.com/test-tools/shift-left-test-engine
+    argocd-image-updater.argoproj.io/image-list: engine=localhost:5000/shift-left-test-engine
     argocd-image-updater.argoproj.io/engine.update-strategy: latest
     argocd-image-updater.argoproj.io/write-back-method: git
 spec:

@@ -11,7 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Infrastructure:** Created `docker-compose.yml` to orchestrate isolated API and PostgreSQL containers, mocking the Teradata network boundary. (Authored by Google Gemini)
 - **Kubernetes:** Created production-ready K8s manifests in `k8s/` (`deployment.yaml`, `service.yaml`, `ingress.yaml`) featuring liveness probes and resource limits. (Authored by Google Gemini)
 - **GitOps:** Configured declarative continuous deployment via `argocd-application.yaml`. (Authored by Google Gemini)
-- **CI/CD:** Extended GitHub Actions test workflow to securely build and push Docker images to Nexus registry post-tests. (Authored by Google Gemini)
+- **Local Simulation:** Created `init_local_gitops.ps1` to locally mock the entire Enterprise release perimeter by booting Sonatype Nexus and natively installing ArgoCD to the local K8s cluster. (Authored by Google Gemini)
+- **CI/CD:** Extended GitHub Actions test workflow to securely build and push Docker images. Bypassed external credential firewalls to deploy strictly to the local simulated Nexus. (Authored by Google Gemini)
 - **Object Storage:** Created `S3StorageClient` in `utils/storage_client.py` wrapping standard AWS `boto3` capabilities unconditionally to ensure Kubernetes stateless architecture compliance. (Authored by Google Gemini)
 - **Database Pooling:** Added `utils/database.py` leveraging `sqlalchemy.engine` and `psycopg2` context managers for synchronous standard execution. (Authored by Google Gemini)
 

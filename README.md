@@ -141,6 +141,14 @@ curl http://localhost:8000/api/v1/results/<request_id>
 python -m pytest tests/
 ```
 
+### Step 8: Trigger Local GitOps Pipeline Simulation (Nexus & ArgoCD)
+```powershell
+# Boots up Sonatype Nexus 3 and installs ArgoCD into your local Kubernetes ecosystem!
+.\init_local_gitops.ps1
+```
+* **Sonatype Nexus:** Available at `http://localhost:8081` (Admin password prints to terminal)
+* **ArgoCD UI:** Available at `https://localhost:8080` (requires `kubectl port-forward svc/argocd-server -n argocd 8080:443`)
+
 ---
 
 ## All Commands Reference
