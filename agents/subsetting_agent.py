@@ -5,12 +5,14 @@ dataset while preserving foreign key relationships across tables.
 """
 
 import re
-import sqlite3
+import pandas as pd
 import csv
 from pathlib import Path
 
 from agents.base_agent import BaseAgent, AgentResult, AgentStatus
 from config.settings import BASE_DIR, KNOWLEDGE_BASE_DIR
+from sqlalchemy import text, inspect
+from utils.database import source_engine
 
 
 class SubsettingAgent(BaseAgent):
@@ -68,45 +70,58 @@ class SubsettingAgent(BaseAgent):
         warnings = []
 
         try:
-            with sqlite3.connect(source_db) as conn:
-                conn.row_factory = sqlite3.Row
-
+            with source_engine.connect() as conn:
                 for table_name, query in queries.items():
                     try:
-                        cursor = conn.execute(query["sql"], query.get("params", []))
-                        rows = cursor.fetchall()
-                        columns = [desc[0] for desc in cursor.description]
+                        # Translate ? parameters to SQLAlchemy named parameters (:p0, :p1, etc.)
+                        params_list = query.get("params", [])
+                        named_params = {f"p{i}": val for i, val in enumerate(params_list)}
+                        
+                        sql_text = query["sql"]
+                        for i in range(len(params_list)):
+                            sql_text = sql_text.replace("?", f":p{i}", 1)
+
+                        df = pd.read_sql(text(sql_text), conn, params=named_params)
 
                         extracted_data[table_name] = {
-                            "columns": columns,
-                            "row_count": len(rows),
-                            "data": [dict(row) for row in rows],
+                            "columns": df.columns.tolist(),
+                            "row_count": len(df),
+                            "data": df.fillna("").to_dict(orient="records"),
                             "sql": query["sql"],
                             "query_type": query["type"],
                         }
 
-                        if len(rows) == 0:
+                        if len(df) == 0:
                             warnings.append(f"{table_name}: No rows returned by subset query")
 
-                    except sqlite3.Error as e:
+                    except Exception as e:
                         errors.append(f"{table_name}: Query failed — {str(e)}")
 
-        except sqlite3.Error as e:
+        except Exception as e:
             return AgentResult(
                 agent_name=self.name,
                 status=AgentStatus.FAILED,
                 errors=[f"Database connection failed: {str(e)}"],
             )
 
-        # Step 3: Save extracted data as CSV files
-        output_dir = BASE_DIR / "extracted_data"
-        output_dir.mkdir(exist_ok=True)
+        # Step 3: Stream extracted data as CSV files to AWS S3
+        from utils.storage_client import storage_client
+        from config.settings import S3_CSVS_BUCKET
+        import io
+        import csv
+        
         saved_files = {}
 
         for table_name, table_data in extracted_data.items():
-            csv_path = output_dir / f"{table_name.upper()}_subset.csv"
-            self._save_csv(csv_path, table_data["columns"], table_data["data"])
-            saved_files[table_name] = str(csv_path)
+            output = io.StringIO()
+            writer = csv.DictWriter(output, fieldnames=table_data["columns"])
+            writer.writeheader()
+            writer.writerows(table_data["data"])
+            
+            request_id = context.get("request_id", "local_req")
+            object_key = f"{request_id}/{table_name.upper()}_subset.csv"
+            storage_client.upload_text(S3_CSVS_BUCKET, object_key, output.getvalue(), "text/csv")
+            saved_files[table_name] = f"s3://{S3_CSVS_BUCKET}/{object_key}"
 
         # Step 4: Validate referential integrity
         integrity_report = self._validate_integrity(extracted_data, relationships)
@@ -145,13 +160,12 @@ class SubsettingAgent(BaseAgent):
         table = self._sanitize_identifier(table)
         date_candidates = ["bus_cyc_dt", "eff_strt_dt", "eff_sdt", "etl_cyc_dt"]
         try:
-            with sqlite3.connect(source_db) as conn:
-                cursor = conn.execute(f"PRAGMA table_info({table})")
-                actual_columns = {row[1].lower() for row in cursor.fetchall()}
+            inspector = inspect(source_engine)
+            actual_columns = {col["name"].lower() for col in inspector.get_columns(table)}
             for col in date_candidates:
                 if col in actual_columns:
                     return col
-        except sqlite3.Error:
+        except Exception:
             pass
         return None
 
@@ -225,13 +239,6 @@ class SubsettingAgent(BaseAgent):
                 return {"from_table": t2, "from_col": c2, "to_table": t1, "to_col": c1}
 
         return None
-
-    def _save_csv(self, path: Path, columns: list, rows: list[dict]):
-        """Save extracted data to CSV."""
-        with open(path, "w", newline="", encoding="utf-8") as f:
-            writer = csv.DictWriter(f, fieldnames=columns)
-            writer.writeheader()
-            writer.writerows(rows)
 
     def _validate_integrity(self, extracted_data: dict, relationships: list) -> dict:
         """Validate referential integrity across extracted subsets."""

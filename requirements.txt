@@ -7,9 +7,11 @@ python-dotenv==1.2.2
 # LLM Integration
 anthropic==0.86.0
 
-# Data Processing
+# Data Processing & ORM
 pandas==3.0.1
 faker==40.11.1
+sqlalchemy==2.0.48
+psycopg2-binary==2.9.10
 
 # PII Detection & Masking (optional — system works without these via pattern fallback)
 # presidio-analyzer==2.2.355
@@ -18,7 +20,7 @@ faker==40.11.1
 # Database
 sqlalchemy==2.0.48
 
-# AWS Cloud Integration (optional — only needed for BEDROCK LLM provider)
+# AWS Cloud Integration (Required for S3 Artifact Storage & optional Bedrock LLM)
 boto3==1.35.0
 
 # Remote Execution (optional — only needed for ENTERPRISE_MODE SSH)

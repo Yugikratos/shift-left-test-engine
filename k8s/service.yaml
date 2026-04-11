@@ -1,0 +1,17 @@
+# k8s/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: test-engine-service
+  namespace: data-tools
+  labels:
+    app: test-engine-api
+spec:
+  type: ClusterIP
+  selector:
+    app: test-engine-api
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8000
+      protocol: TCP

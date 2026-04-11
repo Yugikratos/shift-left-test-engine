@@ -53,25 +53,24 @@ class MaskingAgent(BaseAgent):
                     errors=["No extracted data provided for masking"],
                 )
 
-            output_dir = BASE_DIR / "generated_scripts"
-            output_dir.mkdir(exist_ok=True)
-            script_path = output_dir / f"{request_id}_mask.xfr"
+            from utils.storage_client import storage_client
+            from config.settings import S3_SCRIPTS_BUCKET
 
-            # NOTE: This XFR is a structural stub. Masking rules must be
-            # injected by the Ab Initio graph before execution. Data passed
-            # downstream is NOT masked — it carries schema only.
             table_names = list(extracted_data.keys())
-            with open(script_path, "w") as f:
-                f.write("/* Ab Initio Transform Script — masking rules stub */\n")
-                f.write(f"/* Target Tables: {', '.join(table_names)} */\n")
-                f.write("out :: reformat(in) = begin\n")
-                f.write("  out.* :: in.*;\n")
-                f.write("  // TODO: Inject masking rules from PII profile\n")
-                f.write("end;\n")
+            xfr_content = "/* Ab Initio Transform Script — masking rules stub */\n"
+            xfr_content += f"/* Target Tables: {', '.join(table_names)} */\n"
+            xfr_content += "out :: reformat(in) = begin\n"
+            xfr_content += "  out.* :: in.*;\n"
+            xfr_content += "  // TODO: Inject masking rules from PII profile\n"
+            xfr_content += "end;\n"
+
+            object_key = f"{request_id}/{request_id}_mask.xfr"
+            storage_client.upload_text(S3_SCRIPTS_BUCKET, object_key, xfr_content, "text/plain")
 
             executor = RemoteExecutor(host=ETL_SSH_HOST, user=ETL_SSH_USER)
             executor.connect()
-            exe_res = executor.execute_command(f"air sandbox run /App/Test/masking_graph.mp -file {script_path.name}")
+            # Execute remotely by piping the S3 script directly into Ab Initio
+            exe_res = executor.execute_command(f"aws s3 cp s3://{S3_SCRIPTS_BUCKET}/{object_key} - | air sandbox run /App/Test/masking_graph.mp -file -")
             executor.close()
 
             return AgentResult(
@@ -79,8 +78,8 @@ class MaskingAgent(BaseAgent):
                 status=AgentStatus.COMPLETED if exe_res["exit_code"] == 0 else AgentStatus.FAILED,
                 data={
                     "tables_processed": len(extracted_data),
-                    "masking_method": "enterprise_xfr_generation",
-                    "script": str(script_path),
+                    "masking_method": "enterprise_s3_xfr_generation",
+                    "script": f"s3://{S3_SCRIPTS_BUCKET}/{object_key}",
                     "masked_data": extracted_data,
                 },
                 warnings=["XFR stub generated — masking rules not yet injected. Data passed downstream is unmasked schema only."],

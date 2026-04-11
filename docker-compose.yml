@@ -1,0 +1,43 @@
+version: "3.8"
+
+services:
+  test-engine-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: shift-left-test-engine:local
+    ports:
+      - "8000:8000"
+    environment:
+      - ENTERPRISE_MODE=true
+      - DATABASE_URL=postgresql://psql_admin:mock_td_password@teradata-mock:5432/mock_data
+      - TARGET_DB_URL=postgresql://psql_admin:mock_td_password@teradata-mock:5432/target_test
+    volumes:
+      # We still mount the SQLite files locally until the SQLite driver in the codebase is fully refactored to ORMs
+      - ./knowledge_base:/app/knowledge_base
+      - ./source_data.db:/app/source_data.db
+      - ./target_test.db:/app/target_test.db
+      - ./metadata.db:/app/metadata.db
+    depends_on:
+      teradata-mock:
+        condition: service_healthy
+
+  # Mimicking the remote Teradata Database Server
+  teradata-mock:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: psql_admin
+      POSTGRES_PASSWORD: mock_td_password
+      POSTGRES_DB: mock_data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U psql_admin"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - teradata_mock_data:/var/lib/postgresql/data
+
+volumes:
+  teradata_mock_data:

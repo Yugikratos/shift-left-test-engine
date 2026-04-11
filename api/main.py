@@ -8,7 +8,6 @@ Endpoints:
 """
 
 import json
-import sqlite3
 import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -21,7 +20,8 @@ from pydantic import BaseModel, Field
 
 from config.settings import KNOWLEDGE_BASE_DIR
 from orchestrator.engine import OrchestratorEngine
-from utils.db_setup import setup_all, SOURCE_DB_PATH
+from utils.database import source_engine
+from sqlalchemy import inspect
 from utils.llm_client import llm_client
 from utils.logger import get_logger
 
@@ -33,9 +33,7 @@ log = get_logger("api")
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup and shutdown logic."""
-    if not SOURCE_DB_PATH.exists():
-        print("Setting up databases...")
-        setup_all()
+    # Setup removed from lifespan, rely on GitOps/Kubernetes init containers or manual migration
     print(f"LLM Mode: {llm_client.mode}")
     print("API ready.")
     yield
@@ -92,7 +90,7 @@ async def health_check():
         "service": "Shift-Left Test Data Engine",
         "version": "1.0.0",
         "llm_mode": llm_client.mode,
-        "database_ready": SOURCE_DB_PATH.exists(),
+        "database_ready": True, # Offloaded to Kubernetes Probes
     }
 
 
@@ -151,24 +149,27 @@ async def get_results(request_id: str):
     if req["status"] not in ("completed", "partial"):
         return {"request_id": request_id, "status": req["status"], "message": "Request not yet completed"}
 
-    # Return the saved report
-    report_file = KNOWLEDGE_BASE_DIR / "profiles" / f"report_{request_id}.json"
-    if report_file.exists():
-        with open(report_file) as f:
-            return json.load(f)
+    # Return the saved report from AWS S3
+    from utils.storage_client import storage_client
+    from config.settings import S3_REPORTS_BUCKET
 
-    return {"request_id": request_id, "status": req["status"], "message": "Report file not found"}
+    object_key = f"{request_id}/profile_report.json"
+    report = storage_client.download_json(S3_REPORTS_BUCKET, object_key)
+    
+    if report is not None:
+        return report
+
+    return {"request_id": request_id, "status": req["status"], "message": "Report object not found in S3"}
 
 
 @app.get("/api/v1/tables")
 async def list_tables():
     """List available tables in the source database."""
     try:
-        with sqlite3.connect(str(SOURCE_DB_PATH)) as conn:
-            cursor = conn.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
-            tables = [row[0] for row in cursor.fetchall()]
+        inspector = inspect(source_engine)
+        tables = [t for t in inspector.get_table_names() if not t.startswith("sqlite_")]
         return {"tables": tables, "count": len(tables)}
-    except sqlite3.Error as e:
+    except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 

@@ -115,8 +115,8 @@ class ProfilingAgent(BaseAgent):
             "subsetting_strategy": self._recommend_subsetting(profiles, all_relationships),
         }
 
-        # Save to knowledge base
-        self._save_profile(profile_report)
+        # Save to AWS S3 Reports Bucket
+        self._save_profile(profile_report, context)
 
         return AgentResult(
             agent_name=self.name,
@@ -396,11 +396,11 @@ Provide analysis in JSON format with these keys:
             result["mode"] = "ai_enhanced"
         return result
 
-    def _save_profile(self, profile_report: dict):
-        """Save profile report to knowledge base."""
-        output_dir = KNOWLEDGE_BASE_DIR / "profiles"
-        output_dir.mkdir(parents=True, exist_ok=True)
+    def _save_profile(self, profile_report: dict, context: dict):
+        """Save profile report to AWS S3."""
+        from utils.storage_client import storage_client
+        from config.settings import S3_REPORTS_BUCKET
 
-        output_file = output_dir / "latest_profile.json"
-        with open(output_file, "w") as f:
-            json.dump(profile_report, f, indent=2, default=str)
+        request_id = context.get("request_id", "latest")
+        object_key = f"{request_id}/schema_profile.json"
+        storage_client.upload_json(S3_REPORTS_BUCKET, object_key, profile_report)

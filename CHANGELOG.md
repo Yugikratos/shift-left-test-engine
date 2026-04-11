@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added (Phase 2 - GitOps & Architecture)
+- **Infrastructure:** Created `docker-compose.yml` to orchestrate isolated API and PostgreSQL containers, mocking the Teradata network boundary. (Authored by Google Gemini)
+- **Kubernetes:** Created production-ready K8s manifests in `k8s/` (`deployment.yaml`, `service.yaml`, `ingress.yaml`) featuring liveness probes and resource limits. (Authored by Google Gemini)
+- **GitOps:** Configured declarative continuous deployment via `argocd-application.yaml`. (Authored by Google Gemini)
+- **CI/CD:** Extended GitHub Actions test workflow to securely build and push Docker images to Nexus registry post-tests. (Authored by Google Gemini)
+- **Object Storage:** Created `S3StorageClient` in `utils/storage_client.py` wrapping standard AWS `boto3` capabilities unconditionally to ensure Kubernetes stateless architecture compliance. (Authored by Google Gemini)
+- **Database Pooling:** Added `utils/database.py` leveraging `sqlalchemy.engine` and `psycopg2` context managers for synchronous standard execution. (Authored by Google Gemini)
+
+### Changed (Phase 2 - GitOps & Architecture)
+- **Stateless Infrastructure:** Stripped ephemeral file creations (`with open()`) across all agents and orchestrators, replacing disk logic with direct Boto3 string-buffer remote streams to S3 buckets. (Authored by Google Gemini)
+- **Database Engine Refactoring:** Replaced all hard-coded `sqlite3` driver usage with standard Pandas `DataFrame.to_sql()` and `pd.read_sql()` executions to resolve PostgreSQL/Teradata query incompatibilities. (Authored by Google Gemini)
+- **Database Orchestration:** Refactored `orchestrator/engine.py` pipeline job tracking to use active SQLAlchemy ORM `.merge()` logic instead of fragile flat files. (Authored by Google Gemini)
+- **Docker:** Optimized `Dockerfile` for Enterprise production — runs securely as non-root `appuser`, configured performance ENV variables, and stripped stateful SQLite seeding from the build. (Authored by Google Gemini)
+
 ### Added
 - **Orchestrator:** Wired up `AgentCoordinator` and `StatusTracker` into `OrchestratorEngine` — agents now run through the coordinator with task logging, and request lifecycle is tracked in-memory via the status tracker. (Modified by Claude)
 - **API:** `POST /api/v1/provision/async` now actually runs the pipeline in the background via FastAPI `BackgroundTasks`. Poll `/api/v1/status/{id}` for progress. (Modified by Claude)

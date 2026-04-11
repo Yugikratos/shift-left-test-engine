@@ -23,6 +23,11 @@ ETL_SSH_USER = os.getenv("ETL_SSH_USER", "ab_svc")
 TD_SSH_HOST = os.getenv("TD_SSH_HOST", "td-etl-prod.internal")
 TD_SSH_USER = os.getenv("TD_SSH_USER", "td_svc")
 
+# ── AWS S3 Object Storage ──────────────────────────────
+S3_REPORTS_BUCKET = os.getenv("S3_REPORTS_BUCKET", "test-engine-reports-prod")
+S3_CSVS_BUCKET = os.getenv("S3_CSVS_BUCKET", "test-engine-csvmock-prod")
+S3_SCRIPTS_BUCKET = os.getenv("S3_SCRIPTS_BUCKET", "test-engine-scripts-prod")
+
 # ── LLM Configuration ─────────────────────────────────
 LLM_PROVIDER = os.getenv("LLM_PROVIDER", "ANTHROPIC")
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")

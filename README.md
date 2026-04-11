@@ -387,16 +387,16 @@ When productionizing, these POC components swap out:
 
 | POC Component | Enterprise Replacement | Status |
 |---|---|---|
-| SQLite (source DB) | Teradata | Pending — swap SQLAlchemy dialect + teradatasql driver |
-| SQLite (target DB) | Teradata test schema | Pending — same swap |
+| SQLite (source DB) | Teradata | **Done** — Refactored to agnostic SQLAlchemy Pandas pipelines mockable via Docker Compose Postgres |
+| SQLite (target DB) | Teradata test schema | **Done** — same swap |
 | Local DML files | Ab Initio GDE file system (RHEL paths) | Pending — config change only |
 | Claude API direct | AWS Bedrock (Claude via Bedrock SDK) | **Done** — `LLM_PROVIDER=BEDROCK` in `llm_client.py` |
 | In-memory masking | Ab Initio `.xfr` script generation | **Done** — `ENTERPRISE_MODE=true` in MaskingAgent |
 | SQLite provisioning | Teradata `.bteq` script generation | **Done** — `ENTERPRISE_MODE=true` in ProvisioningAgent |
 | Local execution | SSH remote execution via `paramiko` | **Done** — `RemoteExecutor` (mock by default) |
-| Local JSON storage | AWS S3 (boto3) | Pending — profile reports pushed to S3 bucket |
-| Local Docker run | Docker → Nexus → ArgoCD → EKS | Pending — same container, different deployment |
-| FastAPI local server | EKS service + AWS ALB | Pending — Kubernetes deployment |
+| Local JSON storage | AWS S3 (boto3) | **Done** — Migrated CSVs, Reports, and XFR/BTEQ Scripts to stream natively to AWS S3 Buckets, ensuring stateless Kubernetes scaling |
+| Local Docker run | Docker → Nexus → ArgoCD → EKS | **Done** — Automated Nexus CI/CD and ArgoCD Sync (`argocd-application.yaml`) |
+| FastAPI local server | EKS service + AWS ALB | **Done** — `k8s/` infrastructure created (`deployment`, `service`, `ingress`) |
 | Autosys | Trigger provisioning jobs via Autosys JIL | Pending — replaces manual curl |
 | Connect:Direct | File transfer of DML/DDL to engine | Pending — replaces local file reads |
 

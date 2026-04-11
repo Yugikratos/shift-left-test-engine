@@ -6,7 +6,6 @@ a consolidated report.
 
 import json
 import uuid
-import sqlite3
 from datetime import datetime
 from pathlib import Path
 
@@ -21,9 +20,19 @@ from orchestrator.status import StatusTracker
 from utils.llm_client import llm_client
 from utils.logger import get_logger
 
+from utils.logger import get_logger
+from sqlalchemy import Column, String, Text
+from utils.database import Base, SourceSessionLocal, source_engine
+
+class PipelineJob(Base):
+    __tablename__ = "pipeline_jobs"
+    request_id = Column(String, primary_key=True)
+    status = Column(String)
+    submitted_at = Column(String)
+    scenario = Column(String)
+    payload_json = Column(Text)
+
 log = get_logger("orchestrator")
-
-
 class OrchestratorEngine:
     """Central orchestrator that manages the end-to-end test data provisioning pipeline."""
 
@@ -40,33 +49,32 @@ class OrchestratorEngine:
         self._init_db()
 
     def _init_db(self):
-        with sqlite3.connect(str(self.db_path)) as conn:
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS pipeline_jobs (
-                    request_id TEXT PRIMARY KEY,
-                    status TEXT,
-                    submitted_at TEXT,
-                    scenario TEXT,
-                    payload_json TEXT
-                )
-            """)
-            conn.commit()
+        PipelineJob.metadata.create_all(bind=source_engine)
 
     def _get_job(self, request_id: str) -> dict | None:
-        with sqlite3.connect(str(self.db_path)) as conn:
-            cur = conn.execute("SELECT payload_json FROM pipeline_jobs WHERE request_id = ?", (request_id,))
-            row = cur.fetchone()
-            if row:
-                return json.loads(row[0])
+        db = SourceSessionLocal()
+        try:
+            job = db.query(PipelineJob).filter(PipelineJob.request_id == request_id).first()
+            if job and job.payload_json:
+                return json.loads(job.payload_json)
             return None
+        finally:
+            db.close()
 
     def _save_job(self, req: dict):
-        with sqlite3.connect(str(self.db_path)) as conn:
-            conn.execute(
-                "INSERT OR REPLACE INTO pipeline_jobs (request_id, status, submitted_at, scenario, payload_json) VALUES (?, ?, ?, ?, ?)",
-                (req["request_id"], req["status"], req.get("submitted_at"), req["scenario"], json.dumps(req))
+        db = SourceSessionLocal()
+        try:
+            job = PipelineJob(
+                request_id=req["request_id"],
+                status=req["status"],
+                submitted_at=req.get("submitted_at"),
+                scenario=req["scenario"],
+                payload_json=json.dumps(req)
             )
-            conn.commit()
+            db.merge(job)
+            db.commit()
+        finally:
+            db.close()
 
     def submit_request(self, request: dict) -> dict:
         """Submit a new test data provisioning request.
@@ -362,11 +370,14 @@ class OrchestratorEngine:
         }
 
     def _save_report(self, request_id: str, report: dict):
-        """Save report to knowledge base."""
-        output_dir = KNOWLEDGE_BASE_DIR / "profiles"
-        output_dir.mkdir(parents=True, exist_ok=True)
+        """Save report to AWS S3 Reports Bucket."""
+        from utils.storage_client import storage_client
+        from config.settings import S3_REPORTS_BUCKET
 
-        report_file = output_dir / f"report_{request_id}.json"
-        with open(report_file, "w") as f:
-            json.dump(report, f, indent=2, default=str)
-        log.info(f"Report saved: {report_file}")
+        object_key = f"{request_id}/profile_report.json"
+        success = storage_client.upload_json(S3_REPORTS_BUCKET, object_key, report)
+        
+        if success:
+            log.info(f"Report uploaded to S3: {S3_REPORTS_BUCKET}/{object_key}")
+        else:
+            log.error(f"Failed to upload report to S3 for request {request_id}")

@@ -6,7 +6,9 @@ Responsibilities:
 - Produce a comprehensive validation report
 """
 
-import sqlite3
+import pandas as pd
+from sqlalchemy import text, inspect
+from utils.database import target_engine
 from pathlib import Path
 
 from agents.base_agent import BaseAgent, AgentResult, AgentStatus
@@ -39,30 +41,27 @@ class ProvisioningAgent(BaseAgent):
                     errors=["No masked data provided for provisioning"],
                 )
 
-            output_dir = BASE_DIR / "generated_scripts"
-            output_dir.mkdir(exist_ok=True)
-            script_path = output_dir / f"{request_id}_load.bteq"
+            from utils.storage_client import storage_client
+            from config.settings import S3_SCRIPTS_BUCKET
 
-            with open(script_path, "w") as f:
-                f.write("/* Teradata BTEQ Load Script */\n")
-                # Credentials sourced from .logon file or environment — never hardcoded
-                f.write(".RUN FILE=logon.bteq;\n")
-                f.write("BT;\n")  # Begin Transaction
-                for table, table_info in masked_data.items():
-                    columns = table_info.get("columns", [])
-                    if not columns:
-                        continue
-                    col_str = ", ".join(columns)
-                    val_str = ", ".join(["?" for _ in columns])
-                    f.write(f"DELETE FROM {table} ALL;\n")
-                    f.write(f".IMPORT DATA FILE = {table}.dat\n")
-                    f.write(f"INSERT INTO {table} ({col_str}) VALUES ({val_str});\n")
-                f.write("ET;\n")  # End Transaction (commit)
-                f.write(".LOGOFF;\n.QUIT;\n")
+            bteq_content = "/* Teradata BTEQ Load Script */\n.RUN FILE=logon.bteq;\nBT;\n"
+            for table, table_info in masked_data.items():
+                columns = table_info.get("columns", [])
+                if not columns:
+                    continue
+                col_str = ", ".join(columns)
+                val_str = ", ".join(["?" for _ in columns])
+                bteq_content += f"DELETE FROM {table} ALL;\n"
+                bteq_content += f".IMPORT DATA FILE = {table}.dat\n"
+                bteq_content += f"INSERT INTO {table} ({col_str}) VALUES ({val_str});\n"
+            bteq_content += "ET;\n.LOGOFF;\n.QUIT;\n"
+
+            object_key = f"{request_id}/{request_id}_load.bteq"
+            storage_client.upload_text(S3_SCRIPTS_BUCKET, object_key, bteq_content, "text/plain")
 
             executor = RemoteExecutor(host=TD_SSH_HOST, user=TD_SSH_USER)
             executor.connect()
-            exe_res = executor.execute_command(f"bteq < {script_path.name}")
+            exe_res = executor.execute_command(f"aws s3 cp s3://{S3_SCRIPTS_BUCKET}/{object_key} - | bteq")
             executor.close()
 
             return AgentResult(
@@ -70,8 +69,8 @@ class ProvisioningAgent(BaseAgent):
                 status=AgentStatus.COMPLETED if exe_res["exit_code"] == 0 else AgentStatus.FAILED,
                 data={
                     "tables_loaded": len(masked_data),
-                    "load_method": "enterprise_bteq_generation",
-                    "script": str(script_path),
+                    "load_method": "enterprise_s3_bteq_generation",
+                    "script": f"s3://{S3_SCRIPTS_BUCKET}/{object_key}",
                 },
                 summary=f"Enterprise Mode: Generated and triggered Teradata BTEQ for {len(masked_data)} tables via SSH.",
             )
@@ -90,60 +89,47 @@ class ProvisioningAgent(BaseAgent):
         total_loaded = 0
 
         try:
-            with sqlite3.connect(target_db) as conn:
-                cursor = conn.cursor()
+            for table_name, table_data in masked_data.items():
+                data_rows = table_data.get("data", [])
+                columns = table_data.get("columns", [])
 
-                for table_name, table_data in masked_data.items():
-                    data_rows = table_data.get("data", [])
-                    columns = table_data.get("columns", [])
+                if not data_rows or not columns:
+                    warnings.append(f"{table_name}: No data to load")
+                    continue
 
-                    if not data_rows or not columns:
-                        warnings.append(f"{table_name}: No data to load")
-                        continue
+                try:
+                    df = pd.DataFrame(data_rows)
 
-                    try:
-                        # Step 1: Clear existing data in target table
-                        cursor.execute(f"DELETE FROM {table_name}")
+                    # Step 1: Clear existing data in target table
+                    with target_engine.begin() as conn:
+                        conn.execute(text(f"DELETE FROM {table_name}"))
 
-                        # Step 2: Insert masked data
-                        placeholders = ", ".join(["?" for _ in columns])
-                        col_list = ", ".join(columns)
-                        insert_sql = f"INSERT INTO {table_name} ({col_list}) VALUES ({placeholders})"
+                    # Step 2: Insert masked data
+                    df.to_sql(table_name, target_engine, if_exists="append", index=False)
+                    rows_loaded = len(df)
 
-                        rows_loaded = 0
-                        for row in data_rows:
-                            values = [row.get(col) for col in columns]
-                            cursor.execute(insert_sql, values)
-                            rows_loaded += 1
+                    load_results[table_name] = {
+                        "rows_loaded": rows_loaded,
+                        "columns": len(columns),
+                        "status": "loaded",
+                    }
+                    total_loaded += rows_loaded
 
-                        load_results[table_name] = {
-                            "rows_loaded": rows_loaded,
-                            "columns": len(columns),
-                            "status": "loaded",
-                        }
-                        total_loaded += rows_loaded
+                except Exception as e:
+                    errors.append(f"{table_name}: Load failed — {str(e)}")
+                    load_results[table_name] = {
+                        "rows_loaded": 0,
+                        "status": "failed",
+                        "error": str(e),
+                    }
 
-                    except sqlite3.Error as e:
-                        conn.rollback()
-                        errors.append(f"{table_name}: Load failed — {str(e)}")
-                        load_results[table_name] = {
-                            "rows_loaded": 0,
-                            "status": "failed",
-                            "error": str(e),
-                        }
+            # Step 3: Validate loaded data
+            for table_name in load_results:
+                if load_results[table_name]["status"] == "loaded":
+                    validation = self._validate_table(table_name, masked_data[table_name])
+                    validation_results[table_name] = validation
 
-                if errors:
-                    conn.rollback()
-                else:
-                    conn.commit()
-
-                # Step 3: Validate loaded data
-                for table_name in load_results:
-                    if load_results[table_name]["status"] == "loaded":
-                        validation = self._validate_table(cursor, table_name, masked_data[table_name])
-                        validation_results[table_name] = validation
-
-        except sqlite3.Error as e:
+        except Exception as e:
             return AgentResult(
                 agent_name=self.name,
                 status=AgentStatus.FAILED,
@@ -186,78 +172,76 @@ class ProvisioningAgent(BaseAgent):
             ),
         )
 
-    def _validate_table(self, cursor, table_name: str, expected_data: dict) -> dict:
+    def _validate_table(self, table_name: str, expected_data: dict) -> dict:
         """Run validation checks on a loaded table."""
         checks = []
         expected_rows = len(expected_data.get("data", []))
         expected_columns = expected_data.get("columns", [])
 
-        # Check 1: Row count
-        try:
-            cursor.execute(f"SELECT COUNT(*) FROM {table_name}")
-            actual_count = cursor.fetchone()[0]
-            checks.append({
-                "check": "row_count",
-                "expected": expected_rows,
-                "actual": actual_count,
-                "passed": actual_count == expected_rows,
-            })
-        except Exception as e:
-            checks.append({
-                "check": "row_count",
-                "expected": expected_rows,
-                "actual": f"ERROR: {e}",
-                "passed": False,
-            })
-
-        # Check 2: Column existence
-        try:
-            cursor.execute(f"PRAGMA table_info({table_name})")
-            actual_cols = [row[1] for row in cursor.fetchall()]
-            missing_cols = [c for c in expected_columns if c not in actual_cols]
-            checks.append({
-                "check": "column_existence",
-                "expected_columns": len(expected_columns),
-                "actual_columns": len(actual_cols),
-                "missing": missing_cols,
-                "passed": len(missing_cols) == 0,
-            })
-        except Exception as e:
-            checks.append({
-                "check": "column_existence",
-                "error": str(e),
-                "passed": False,
-            })
-
-        # Check 3: No completely empty rows
-        try:
-            cursor.execute(f"SELECT * FROM {table_name} LIMIT 1")
-            sample = cursor.fetchone()
-            has_data = sample is not None and any(v is not None for v in sample)
-            checks.append({
-                "check": "data_not_empty",
-                "passed": has_data,
-            })
-        except Exception as e:
-            checks.append({
-                "check": "data_not_empty",
-                "error": str(e),
-                "passed": False,
-            })
-
-        # Check 4: NOT NULL constraint check (for key columns)
-        key_columns = self._identify_key_columns(expected_columns)
-        for key_col in key_columns:
+        with target_engine.connect() as conn:
+            # Check 1: Row count
             try:
-                cursor.execute(f"SELECT COUNT(*) FROM {table_name} WHERE {key_col} IS NULL OR {key_col} = ''")
-                null_count = cursor.fetchone()[0]
+                actual_count = conn.execute(text(f"SELECT COUNT(*) FROM {table_name}")).scalar()
                 checks.append({
-                    "check": f"not_null_{key_col}",
-                    "null_count": null_count,
-                    "passed": null_count == 0,
+                    "check": "row_count",
+                    "expected": expected_rows,
+                    "actual": actual_count,
+                    "passed": actual_count == expected_rows,
                 })
-            except Exception:
-                pass
+            except Exception as e:
+                checks.append({
+                    "check": "row_count",
+                    "expected": expected_rows,
+                    "actual": f"ERROR: {e}",
+                    "passed": False,
+                })
+
+            # Check 2: Column existence
+            try:
+                inspector = inspect(target_engine)
+                actual_cols = [c["name"] for c in inspector.get_columns(table_name)]
+                missing_cols = [c for c in expected_columns if c not in actual_cols]
+                checks.append({
+                    "check": "column_existence",
+                    "expected_columns": len(expected_columns),
+                    "actual_columns": len(actual_cols),
+                    "missing": missing_cols,
+                    "passed": len(missing_cols) == 0,
+                })
+            except Exception as e:
+                checks.append({
+                    "check": "column_existence",
+                    "error": str(e),
+                    "passed": False,
+                })
+
+            # Check 3: No completely empty rows
+            try:
+                sample = conn.execute(text(f"SELECT * FROM {table_name} LIMIT 1")).fetchone()
+                has_data = sample is not None and any(v is not None for v in sample)
+                checks.append({
+                    "check": "data_not_empty",
+                    "passed": has_data,
+                })
+            except Exception as e:
+                checks.append({
+                    "check": "data_not_empty",
+                    "error": str(e),
+                    "passed": False,
+                })
+
+            # Check 4: NOT NULL constraint check (for key columns)
+            key_columns = self._identify_key_columns(expected_columns)
+            for key_col in key_columns:
+                try:
+                    null_count = conn.execute(text(f"SELECT COUNT(*) FROM {table_name} WHERE {key_col} IS NULL OR {key_col} = ''")).scalar()
+                    checks.append({
+                        "check": f"not_null_{key_col}",
+                        "null_count": null_count,
+                        "passed": null_count == 0,
+                    })
+                except Exception:
+                    pass
 
         return {
             "table": table_name,
