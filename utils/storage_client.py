@@ -2,7 +2,7 @@
 
 import json
 import boto3
-from botocore.exceptions import ClientError
+from botocore.exceptions import ClientError, BotoCoreError
 
 from config.settings import S3_REPORTS_BUCKET, S3_CSVS_BUCKET, S3_SCRIPTS_BUCKET
 from utils.logger import get_logger
@@ -29,7 +29,7 @@ class S3StorageClient:
             )
             log.info(f"S3 Upload Success: s3://{bucket}/{object_key}")
             return True
-        except ClientError as e:
+        except (ClientError, BotoCoreError) as e:
             log.error(f"S3 JSON Upload Failed ({bucket}/{object_key}): {e}")
             return False
 
@@ -44,7 +44,7 @@ class S3StorageClient:
             )
             log.info(f"S3 Upload Success: s3://{bucket}/{object_key}")
             return True
-        except ClientError as e:
+        except (ClientError, BotoCoreError) as e:
             log.error(f"S3 Text Upload Failed ({bucket}/{object_key}): {e}")
             return False
 
@@ -55,10 +55,13 @@ class S3StorageClient:
             return json.loads(response["Body"].read().decode("utf-8"))
         except ClientError as e:
             # Check for 404 (NoSuchKey)
-            if e.response["Error"]["Code"] == "NoSuchKey":
+            if "Error" in e.response and e.response["Error"]["Code"] == "NoSuchKey":
                 log.info(f"S3 JSON Object Not Found: s3://{bucket}/{object_key}")
             else:
                 log.error(f"S3 JSON Download Failed ({bucket}/{object_key}): {e}")
+            return None
+        except BotoCoreError as e:
+            log.error(f"S3 JSON Download Failed ({bucket}/{object_key}): {e}")
             return None
 
 

@@ -35,7 +35,7 @@ LLM_MODEL = os.getenv("LLM_MODEL", "claude-sonnet-4-20250514")
 LLM_ENABLED = bool(ANTHROPIC_API_KEY) or (LLM_PROVIDER == "BEDROCK" and bool(os.getenv("AWS_DEFAULT_REGION")))
 
 # ── Database ───────────────────────────────────────────
-DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{BASE_DIR / 'test_data_engine.db'}")
+DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{BASE_DIR / 'source_data.db'}")
 TARGET_DB_URL = os.getenv("TARGET_DB_URL", f"sqlite:///{BASE_DIR / 'target_test.db'}")
 
 # ── Logging ────────────────────────────────────────────

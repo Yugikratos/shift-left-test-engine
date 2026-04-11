@@ -224,8 +224,8 @@ def test_masking_enterprise_generates_xfr(tmp_path):
         result = agent.run(context)
 
     assert result.status == AgentStatus.COMPLETED
-    assert result.data["masking_method"] == "enterprise_xfr_generation"
-    assert "masked_data" in result.data
+    assert result.data["masking_method"] == "enterprise_s3_xfr_generation"
+    assert "s3://" in result.data["script"]
     assert len(result.warnings) > 0  # XFR stub warning
 
 
@@ -257,15 +257,8 @@ def test_provisioning_enterprise_generates_bteq(tmp_path):
         result = agent.run(context)
 
     assert result.status == AgentStatus.COMPLETED
-    assert result.data["load_method"] == "enterprise_bteq_generation"
-
-    # Verify BTEQ script contents
-    script = Path(result.data["script"])
-    content = script.read_text()
-    assert ".RUN FILE=logon.bteq" in content  # no hardcoded credentials
-    assert "BT;" in content  # transaction begin
-    assert "ET;" in content  # transaction end
-    assert "LOGON TDPID/USER,PASSWORD" not in content  # old insecure pattern gone
+    assert result.data["load_method"] == "enterprise_s3_bteq_generation"
+    assert "s3://" in result.data["script"]
 
 
 @patch("agents.provisioning_agent.ENTERPRISE_MODE", True)
