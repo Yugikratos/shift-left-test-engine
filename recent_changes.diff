@@ -1,0 +1,772 @@
+﻿diff --git a/CHANGELOG.md b/CHANGELOG.md
+index 623f1c3..14a3156 100644
+--- a/CHANGELOG.md
++++ b/CHANGELOG.md
+@@ -8,6 +8,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
+ ## [Unreleased]
+ 
+ ### Added
++- **Orchestrator:** Wired up `AgentCoordinator` and `StatusTracker` into `OrchestratorEngine` ÔÇö agents now run through the coordinator with task logging, and request lifecycle is tracked in-memory via the status tracker. (Modified by Claude)
++- **API:** `POST /api/v1/provision/async` now actually runs the pipeline in the background via FastAPI `BackgroundTasks`. Poll `/api/v1/status/{id}` for progress. (Modified by Claude)
++- **Tests:** Added `tests/test_coordinator_status.py` with 14 tests covering `AgentCoordinator` (assign, progress, task log, reset) and `StatusTracker` (register, lifecycle, summary, errors). Total tests: 62. (Modified by Claude)
++
++### Changed
++- **Masking:** `MaskingAgent._detect_pii_type()` now includes `PII_ID_PATTERNS` (`tax_id`, `ein`, `passport`) in fallback detection ÔÇö previously these columns could bypass masking entirely. (Modified by Claude)
++- **Subsetting:** Added `_sanitize_identifier()` to `SubsettingAgent` ÔÇö validates all table and column names against `^\w+$` before SQL interpolation to prevent injection. (Modified by Claude)
++- **Parsers:** Replaced `print()` warnings in `dml_parser.py` and `ddl_parser.py` with structured `loguru` logging. (Modified by Claude)
++- **Deps:** Updated `requirements.txt` to match installed versions (fastapi 0.135.2, uvicorn 0.42.0, pydantic 2.12.5, pandas 3.0.1, faker 40.11.1, rich 14.3.3, loguru 0.7.3, httpx 0.28.1, pytest 9.0.2). Added `pytest-cov==7.1.0`. (Modified by Claude)
++
++### Fixed
++- **db_setup:** Corrected seed count print from ~690 to ~780 (was missing 90 `etl_src_ctl` records). (Modified by Claude)
++
++### Previously Added
+ - **Enterprise Mode:** Implemented `ENTERPRISE_MODE` toggle in `config/settings.py` to bypass local execution. (Authored by Google Gemini)
+ - **Code Generation:** `MaskingAgent` now generates Ab Initio `.XFR` transform scripts natively when in Enterprise Mode. (Authored by Google Gemini)
+ - **Code Generation:** `ProvisioningAgent` now generates Teradata `.BTEQ` load scripts natively when in Enterprise Mode. (Authored by Google Gemini)
+diff --git a/CLAUDE.md b/CLAUDE.md
+index 4349928..ee9d579 100644
+--- a/CLAUDE.md
++++ b/CLAUDE.md
+@@ -17,7 +17,7 @@ uvicorn api.main:app --reload --port 8000      # Start API server
+ 
+ ## How to test
+ ```bash
+-python -m pytest tests/ -v                     # Run all 30 tests
++python -m pytest tests/ -v                     # Run all 62 tests
+ python -m orchestrator.demo                    # Run full pipeline demo
+ ```
+ 
+@@ -69,7 +69,7 @@ API Request ÔåÆ OrchestratorEngine ÔåÆ Profiling ÔåÆ Subsetting ÔåÆ Masking ÔåÆ
+ 
+ - **ProfilingAgent** ÔÇö Parses DML/DDL files, classifies fields (PII, Control, SCD-2, Key, Business), detects relationships via naming conventions, optionally uses Claude for deeper analysis. Saves profile to `knowledge_base/profiles/`.
+ - **SubsettingAgent** ÔÇö Generates referentially-intact SQL using anchor table strategy with IN-subquery joins. Validates FK integrity. Saves CSVs to `extracted_data/`.
+-- **MaskingAgent** ÔÇö Anonymizes PII with consistent masking (same input ÔåÆ same output via hash-keyed cache). Uses Faker for type-specific output: namesÔåÆ`fake.name()`, addressesÔåÆ`fake.street_address()`, citiesÔåÆ`fake.city()`, statesÔåÆ`fake.state_abbr()`, zipsÔåÆ`fake.zipcode()`, phonesÔåÆ`555-XXXX`, IDsÔåÆSHA-256 hash. Pattern-based detection only (Presidio removed).
++- **MaskingAgent** ÔÇö Anonymizes PII with consistent masking (same input ÔåÆ same output via hash-keyed cache). Uses Faker for type-specific output: namesÔåÆ`fake.name()`, addressesÔåÆ`fake.street_address()`, citiesÔåÆ`fake.city()`, statesÔåÆ`fake.state_abbr()`, zipsÔåÆ`fake.zipcode()`, phonesÔåÆ`fake.phone_number()`, emailsÔåÆ`fake.email()`, SSNsÔåÆ`fake.ssn()`, other PIIÔåÆ`MASKED_????` (Faker lexify fallback). Pattern-based detection only (Presidio removed).
+ - **ProvisioningAgent** ÔÇö Loads masked data into target SQLite DB with transaction safety (rollback on partial failure). Runs validation checks (row counts, column existence, NOT NULL constraints).
+ 
+ ### Key Modules
+@@ -88,11 +88,12 @@ The system operates without an API key via rule-based pattern matching defined i
+ 
+ ## Testing
+ 
+-48 tests across 4 files:
++62 tests across 5 files:
+ - `tests/test_pipeline.py` (15) ÔÇö End-to-end pipeline, individual agents, input validation, edge cases
+ - `tests/test_api.py` (5) ÔÇö Health check, list tables, provision, 404 handling
+ - `tests/test_parsers.py` (10) ÔÇö DML/DDL parsing, field extraction, empty input handling
+ - `tests/test_engine_features.py` (18) ÔÇö Retry logic, skip flags, persistent storage, enterprise mode, RemoteExecutor, Bedrock fallback
++- `tests/test_coordinator_status.py` (14) ÔÇö AgentCoordinator task assignment/progress/reset, StatusTracker lifecycle/summary/errors
+ 
+ GitHub Actions CI runs on every push/PR to `main` (`.github/workflows/test.yml`).
+ 
+diff --git a/CLAUDE_CONTEXT.md b/CLAUDE_CONTEXT.md
+index 921720d..02720f1 100644
+--- a/CLAUDE_CONTEXT.md
++++ b/CLAUDE_CONTEXT.md
+@@ -7,7 +7,7 @@ Goal: Demonstrate the 4-agent pipeline works end-to-end.
+ 
+ ## Current Status
+ - Phase 1 (Fix POC bugs): COMPLETE
+-- Phase 1.5 (Code quality, CI, tests): COMPLETE ÔÇö 48 tests, GitHub Actions CI, hardened DB handling
++- Phase 1.5 (Code quality, CI, tests): COMPLETE ÔÇö 62 tests, GitHub Actions CI, hardened DB handling
+ - Phase 2 (Map to real stack): IN PROGRESS ÔÇö Enterprise mode, Bedrock, SSH execution, XFR/BTEQ generation done
+ 
+ ## Working Commands
+@@ -25,7 +25,7 @@ python -m orchestrator.demo
+ python -m uvicorn api.main:app --port 8000
+ # Then open: http://127.0.0.1:8000/docs
+ 
+-# Run tests (48 tests)
++# Run tests (62 tests)
+ python -m pytest tests/ -v
+ ```
+ 
+@@ -51,7 +51,8 @@ python -m pytest tests/ -v
+ | rich | 14.3.3 | Terminal output formatting |
+ | loguru | 0.7.3 | Structured logging |
+ | httpx | 0.28.1 | HTTP client (API testing) |
+-| pytest | 8.3.3 | Test framework |
++| pytest | 9.0.2 | Test framework |
++| pytest-cov | 7.1.0 | Test coverage reporting |
+ 
+ > **Note:** Install with `pip install <package> --prefer-binary` on Python 3.14 to avoid build failures.
+ 
+@@ -99,7 +100,7 @@ shift-left-test-engine/
+ Ôöé   Ôö£ÔöÇÔöÇ dml_parser.py           # Ab Initio DML format parser
+ Ôöé   ÔööÔöÇÔöÇ ddl_parser.py           # Teradata DDL parser
+ Ôö£ÔöÇÔöÇ utils/
+-Ôöé   Ôö£ÔöÇÔöÇ db_setup.py             # Seeds source_data.db with ~690 mock records
++Ôöé   Ôö£ÔöÇÔöÇ db_setup.py             # Seeds source_data.db with ~780 mock records (5 tables)
+ Ôöé   Ôö£ÔöÇÔöÇ llm_client.py           # LLM client (Anthropic/Bedrock) with graceful fallback
+ Ôöé   Ôö£ÔöÇÔöÇ logger.py               # Loguru logger with console + file rotation
+ Ôöé   ÔööÔöÇÔöÇ remote_executor.py      # SSH remote executor (mock/real) for enterprise mode
+@@ -109,7 +110,8 @@ shift-left-test-engine/
+ Ôöé   Ôö£ÔöÇÔöÇ test_pipeline.py        # Pipeline + agent tests (15 tests)
+ Ôöé   Ôö£ÔöÇÔöÇ test_api.py             # API endpoint tests (5 tests)
+ Ôöé   Ôö£ÔöÇÔöÇ test_parsers.py         # DML/DDL parser tests (10 tests)
+-Ôöé   ÔööÔöÇÔöÇ test_engine_features.py # Retry, skip flags, persistence, enterprise mode (18 tests)
++Ôöé   Ôö£ÔöÇÔöÇ test_engine_features.py # Retry, skip flags, persistence, enterprise mode (18 tests)
++Ôöé   ÔööÔöÇÔöÇ test_coordinator_status.py # Coordinator + status tracker (14 tests)
+ Ôö£ÔöÇÔöÇ knowledge_base/
+ Ôöé   ÔööÔöÇÔöÇ profiles/               # JSON reports saved after each run
+ Ôö£ÔöÇÔöÇ mock_data/
+diff --git a/README.md b/README.md
+index fc5f55d..80e5ffe 100644
+--- a/README.md
++++ b/README.md
+@@ -87,7 +87,7 @@ venv\Scripts\Activate.ps1
+ pip install -r requirements.txt
+ 
+ # If on Python 3.14 (avoids C-extension build failures)
+-pip install fastapi uvicorn pydantic python-dotenv anthropic pandas faker sqlalchemy boto3 paramiko rich loguru httpx --prefer-binary
++pip install fastapi uvicorn pydantic python-dotenv anthropic pandas faker sqlalchemy boto3 paramiko rich loguru httpx pytest pytest-cov --prefer-binary
+ ```
+ 
+ ### Step 3: Configure API Key (Optional)
+@@ -102,7 +102,7 @@ copy .env.example .env
+ ```powershell
+ python -m utils.db_setup
+ ```
+-**What this does:** Creates `source_data.db` (SQLite) with 3 tables and ~690 rows of Faker-generated mock records. Also creates an empty `target_test.db` for provisioning output.
++**What this does:** Creates `source_data.db` (SQLite) with 5 tables and ~780 rows of Faker-generated mock records (3 business tables + 2 ETL control tables). Also creates an empty `target_test.db` for provisioning output.
+ 
+ ### Step 5: Run the Engine
+ 
+@@ -186,7 +186,7 @@ shift-left-test-engine/
+ Ôö£ÔöÇÔöÇ config/
+ Ôöé   ÔööÔöÇÔöÇ settings.py             # Env var loading, PII/relationship detection patterns
+ Ôö£ÔöÇÔöÇ utils/
+-Ôöé   Ôö£ÔöÇÔöÇ db_setup.py             # Creates + seeds source_data.db (~690 mock records)
++Ôöé   Ôö£ÔöÇÔöÇ db_setup.py             # Creates + seeds source_data.db (~780 mock records)
+ Ôöé   Ôö£ÔöÇÔöÇ llm_client.py           # LLM client (Anthropic/Bedrock) ÔÇö returns None if unavailable
+ Ôöé   Ôö£ÔöÇÔöÇ logger.py               # Loguru logger with rotating file output
+ Ôöé   ÔööÔöÇÔöÇ remote_executor.py      # SSH remote executor (mock/real) for enterprise mode
+@@ -202,7 +202,8 @@ shift-left-test-engine/
+ Ôöé   Ôö£ÔöÇÔöÇ test_pipeline.py        # Pipeline + agent tests (15 tests)
+ Ôöé   Ôö£ÔöÇÔöÇ test_api.py             # API endpoint tests (5 tests)
+ Ôöé   Ôö£ÔöÇÔöÇ test_parsers.py         # DML/DDL parser tests (10 tests)
+-Ôöé   ÔööÔöÇÔöÇ test_engine_features.py # Enterprise, retry, skip flags, persistence (18 tests)
++Ôöé   Ôö£ÔöÇÔöÇ test_engine_features.py # Enterprise, retry, skip flags, persistence (18 tests)
++Ôöé   ÔööÔöÇÔöÇ test_coordinator_status.py # Coordinator + status tracker (14 tests)
+ Ôö£ÔöÇÔöÇ source_data.db              # SQLite source DB (mock production data)
+ Ôö£ÔöÇÔöÇ target_test.db              # SQLite target DB (provisioned test data)
+ Ôö£ÔöÇÔöÇ metadata.db                 # SQLite persistent job store (survives restarts)
+@@ -279,6 +280,12 @@ shift-left-test-engine/
+ | `LOG_LEVEL` | `INFO` | Logging level (`DEBUG`, `INFO`, `WARNING`, `ERROR`) |
+ | `DATABASE_URL` | `sqlite:///./test_data_engine.db` | Source DB connection string |
+ | `TARGET_DB_URL` | `sqlite:///./target_test.db` | Target DB connection string |
++| `API_HOST` | `0.0.0.0` | API server bind address |
++| `API_PORT` | `8000` | API server port |
++| `MOCK_DATA_DIR` | `<project>/mock_data` | Path to mock DML/DDL data directory |
++| `KNOWLEDGE_BASE_DIR` | `<project>/knowledge_base` | Path to knowledge base / profile reports |
++| `DML_DIR` | `<MOCK_DATA_DIR>/dml` | Path to Ab Initio DML files |
++| `DDL_DIR` | `<MOCK_DATA_DIR>/ddl` | Path to Teradata DDL files |
+ 
+ ---
+ 
+@@ -326,8 +333,10 @@ Anonymizes PII fields with deterministic masking (same input always produces sam
+ - `city`/`cty` fields ÔåÆ `fake.city()`
+ - `state`/`st_abbr` fields ÔåÆ `fake.state_abbr()`
+ - `zip`/`postal` fields ÔåÆ `fake.zipcode()`
+-- `phone` fields ÔåÆ `555-XXXX` format
+-- `id` fields ÔåÆ SHA-256 hash
++- `phone`/`tel` fields ÔåÆ `fake.phone_number()`
++- `email` fields ÔåÆ `fake.email()`
++- `ssn` fields ÔåÆ `fake.ssn()`
++- Other PII ÔåÆ `MASKED_????` (Faker lexify fallback)
+ 
+ ### ProvisioningAgent
+ Loads masked data into target SQLite DB with transaction safety (rollback on partial failure). Runs validation checks: row counts match, all expected columns exist, NOT NULL constraints satisfied. Returns pass/fail per check.
+@@ -357,7 +366,7 @@ GitHub Actions runs automatically on every push to `main`:
+ 2. Installs dependencies from `requirements.txt`
+ 3. Seeds the SQLite databases (`python -m utils.db_setup`)
+ 4. Runs the full 4-agent pipeline demo (`python -m orchestrator.demo`)
+-5. Runs pytest ÔÇö **48 tests** across pipeline, API, parsers, and enterprise features (`python -m pytest tests/ -v`)
++5. Runs pytest ÔÇö **62 tests** across pipeline, API, parsers, enterprise features, and coordinator/status (`python -m pytest tests/ -v`)
+ 
+ Workflow file: [`.github/workflows/test.yml`](.github/workflows/test.yml)
+ 
+@@ -368,6 +377,7 @@ Workflow file: [`.github/workflows/test.yml`](.github/workflows/test.yml)
+ | `test_api.py` | 5 | Health check, list tables, provision, 404 handling |
+ | `test_parsers.py` | 10 | DML/DDL parsing, field extraction, empty input handling |
+ | `test_engine_features.py` | 18 | Retry logic, skip flags, persistent storage, enterprise XFR/BTEQ generation, RemoteExecutor, Bedrock fallback |
++| `test_coordinator_status.py` | 14 | AgentCoordinator task assignment/progress/reset, StatusTracker lifecycle/summary/errors |
+ 
+ ---
+ 
+diff --git a/agents/masking_agent.py b/agents/masking_agent.py
+index 9a9d635..914f62e 100644
+--- a/agents/masking_agent.py
++++ b/agents/masking_agent.py
+@@ -20,7 +20,7 @@ from collections import defaultdict
+ from faker import Faker
+ 
+ from agents.base_agent import BaseAgent, AgentResult, AgentStatus
+-from config.settings import PII_NAME_PATTERNS, PII_ADDRESS_PATTERNS, PII_PHONE_PATTERNS, ENTERPRISE_MODE, BASE_DIR, ETL_SSH_HOST, ETL_SSH_USER
++from config.settings import PII_NAME_PATTERNS, PII_ADDRESS_PATTERNS, PII_PHONE_PATTERNS, PII_ID_PATTERNS, ENTERPRISE_MODE, BASE_DIR, ETL_SSH_HOST, ETL_SSH_USER
+ from utils.remote_executor import RemoteExecutor
+ 
+ 
+@@ -226,7 +226,7 @@ class MaskingAgent(BaseAgent):
+ 
+         # Fall back to config patterns for any other PII not covered above
+         name = column_name.lower()
+-        for p in PII_NAME_PATTERNS + PII_ADDRESS_PATTERNS + PII_PHONE_PATTERNS:
++        for p in PII_NAME_PATTERNS + PII_ADDRESS_PATTERNS + PII_PHONE_PATTERNS + PII_ID_PATTERNS:
+             if p in name:
+                 return "GENERIC_PII"
+         return None
+diff --git a/agents/subsetting_agent.py b/agents/subsetting_agent.py
+index ab0752c..52aefeb 100644
+--- a/agents/subsetting_agent.py
++++ b/agents/subsetting_agent.py
+@@ -4,6 +4,7 @@ Takes the profiling report and produces SQL queries that extract a small
+ dataset while preserving foreign key relationships across tables.
+ """
+ 
++import re
+ import sqlite3
+ import csv
+ from pathlib import Path
+@@ -18,6 +19,13 @@ class SubsettingAgent(BaseAgent):
+     def __init__(self):
+         super().__init__("Smart Subsetting Agent")
+ 
++    @staticmethod
++    def _sanitize_identifier(name: str) -> str:
++        """Validate that a SQL identifier contains only safe characters."""
++        if not re.match(r"^\w+$", name):
++            raise ValueError(f"Invalid SQL identifier: {name!r}")
++        return name
++
+     def execute(self, context: dict) -> AgentResult:
+         """Execute subsetting based on profile report.
+ 
+@@ -134,6 +142,7 @@ class SubsettingAgent(BaseAgent):
+ 
+     def _find_date_column(self, table: str, source_db: str) -> str | None:
+         """Find a valid date column in the table by checking against known patterns."""
++        table = self._sanitize_identifier(table)
+         date_candidates = ["bus_cyc_dt", "eff_strt_dt", "eff_sdt", "etl_cyc_dt"]
+         try:
+             with sqlite3.connect(source_db) as conn:
+@@ -150,6 +159,7 @@ class SubsettingAgent(BaseAgent):
+                           record_count: int, date_range: dict) -> dict:
+         """Generate subsetting SQL queries maintaining referential integrity."""
+         queries = {}
++        anchor = self._sanitize_identifier(anchor)
+ 
+         # Anchor table: direct subset with LIMIT
+         anchor_where = []
+@@ -160,11 +170,11 @@ class SubsettingAgent(BaseAgent):
+         date_col = self._find_date_column(anchor, source_db)
+ 
+         if date_col and date_range.get("start"):
+-            anchor_where.append(f"{date_col} >= ?")
++            anchor_where.append(f"{self._sanitize_identifier(date_col)} >= ?")
+             anchor_params.append(date_range["start"])
+ 
+         if date_col and date_range.get("end"):
+-            anchor_where.append(f"{date_col} <= ?")
++            anchor_where.append(f"{self._sanitize_identifier(date_col)} <= ?")
+             anchor_params.append(date_range["end"])
+ 
+         where_clause = f" WHERE {' AND '.join(anchor_where)}" if anchor_where else ""
+@@ -176,12 +186,13 @@ class SubsettingAgent(BaseAgent):
+ 
+         # Related tables: join back to anchor's key values
+         for table_name in order[1:]:
++            table_name = self._sanitize_identifier(table_name)
+             rel = self._find_relationship(table_name, anchor, relationships)
+             if rel:
+                 # Subset via IN (subquery)
+                 from_table = rel["from_table"]
+-                from_col = rel["from_col"]
+-                to_col = rel["to_col"]
++                from_col = self._sanitize_identifier(rel["from_col"])
++                to_col = self._sanitize_identifier(rel["to_col"])
+ 
+                 queries[table_name] = {
+                     "sql": (
+diff --git a/api/main.py b/api/main.py
+index 8604729..6048cca 100644
+--- a/api/main.py
++++ b/api/main.py
+@@ -15,7 +15,7 @@ from pathlib import Path
+ 
+ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+ 
+-from fastapi import FastAPI, HTTPException
++from fastapi import FastAPI, HTTPException, BackgroundTasks
+ from fastapi.middleware.cors import CORSMiddleware
+ from pydantic import BaseModel, Field
+ 
+@@ -23,6 +23,9 @@ from config.settings import KNOWLEDGE_BASE_DIR
+ from orchestrator.engine import OrchestratorEngine
+ from utils.db_setup import setup_all, SOURCE_DB_PATH
+ from utils.llm_client import llm_client
++from utils.logger import get_logger
++
++log = get_logger("api")
+ 
+ 
+ # ÔöÇÔöÇ Lifespan ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+@@ -112,9 +115,20 @@ async def provision(request: ProvisionRequest):
+ 
+ 
+ @app.post("/api/v1/provision/async")
+-async def provision_async(request: ProvisionRequest):
+-    """Submit a request and get a receipt (for future async implementation)."""
++async def provision_async(request: ProvisionRequest, background_tasks: BackgroundTasks):
++    """Submit a request for async execution and get a receipt immediately.
++
++    The pipeline runs in the background. Poll /api/v1/status/{request_id} for progress.
++    """
+     receipt = engine.submit_request(request.model_dump())
++
++    def _run_pipeline(request_id: str):
++        try:
++            engine.execute_request(request_id)
++        except Exception as e:
++            log.error(f"Background pipeline failed for {request_id}: {e}")
++
++    background_tasks.add_task(_run_pipeline, receipt["request_id"])
+     return receipt
+ 
+ 
+diff --git a/orchestrator/engine.py b/orchestrator/engine.py
+index 4aaed93..be16f25 100644
+--- a/orchestrator/engine.py
++++ b/orchestrator/engine.py
+@@ -16,6 +16,8 @@ from agents.subsetting_agent import SubsettingAgent
+ from agents.masking_agent import MaskingAgent
+ from agents.provisioning_agent import ProvisioningAgent
+ from config.settings import BASE_DIR, KNOWLEDGE_BASE_DIR
++from orchestrator.coordinator import AgentCoordinator
++from orchestrator.status import StatusTracker
+ from utils.llm_client import llm_client
+ from utils.logger import get_logger
+ 
+@@ -32,6 +34,8 @@ class OrchestratorEngine:
+             "masking": MaskingAgent(),
+             "provisioning": ProvisioningAgent(),
+         }
++        self.coordinator = AgentCoordinator(self.agents)
++        self.status_tracker = StatusTracker()
+         self.db_path = BASE_DIR / "metadata.db"
+         self._init_db()
+ 
+@@ -128,6 +132,7 @@ class OrchestratorEngine:
+             "agent_results": {},
+         }
+         self._save_job(req)
++        self.status_tracker.register(request_id, req)
+ 
+         return {
+             "request_id": request_id,
+@@ -148,6 +153,8 @@ class OrchestratorEngine:
+         req["status"] = "running"
+         req["started_at"] = datetime.now().isoformat()
+         self._save_job(req)
++        self.coordinator.reset()
++        self.status_tracker.mark_running(request_id)
+ 
+         context = {
+             "request_id": request_id,
+@@ -170,15 +177,21 @@ class OrchestratorEngine:
+         # ÔöÇÔöÇ Step 1: Profiling ÔöÇÔöÇ
+         if not req.get("skip_profiling"):
+             log.info("[1/4] Running Data Profiling Agent...")
+-            profile_result = self.agents["profiling"].run(context)
++            self.status_tracker.update_agent_status(request_id, "profiling", "running")
++            profile_result = self.coordinator.assign("profiling", context)
+             req["agent_results"]["profiling"] = profile_result.to_dict()
++            self.status_tracker.update_agent_status(
++                request_id, "profiling", profile_result.status.value,
++                summary=profile_result.summary, duration_seconds=profile_result.duration_seconds,
++            )
+             log.info(f"ÔåÆ {profile_result.summary}")
+-            
++
+             if profile_result.status == AgentStatus.FAILED:
+                 req["status"] = "failed"
+                 self._save_job(req)
++                self.status_tracker.mark_completed(request_id, "failed")
+                 return self._build_report(req)
+-                
++
+             context["profile_report"] = profile_result.data
+             context["pii_summary"] = profile_result.data.get("pii_summary", {})
+         else:
+@@ -189,13 +202,19 @@ class OrchestratorEngine:
+         # ÔöÇÔöÇ Step 2: Subsetting ÔöÇÔöÇ
+         if not req.get("skip_subsetting"):
+             log.info("[2/4] Running Smart Subsetting Agent...")
+-            subset_result = self.agents["subsetting"].run(context)
++            self.status_tracker.update_agent_status(request_id, "subsetting", "running")
++            subset_result = self.coordinator.assign("subsetting", context)
+             req["agent_results"]["subsetting"] = subset_result.to_dict()
++            self.status_tracker.update_agent_status(
++                request_id, "subsetting", subset_result.status.value,
++                summary=subset_result.summary, duration_seconds=subset_result.duration_seconds,
++            )
+             log.info(f"ÔåÆ {subset_result.summary}")
+ 
+             if subset_result.status == AgentStatus.FAILED:
+                 req["status"] = "failed"
+                 self._save_job(req)
++                self.status_tracker.mark_completed(request_id, "failed")
+                 return self._build_report(req)
+ 
+             context["extracted_data"] = subset_result.data.get("extracted_data", {})
+@@ -207,13 +226,19 @@ class OrchestratorEngine:
+         # ÔöÇÔöÇ Step 3: Masking ÔöÇÔöÇ
+         if not req.get("skip_masking"):
+             log.info("[3/4] Running Data Masking Agent...")
+-            mask_result = self.agents["masking"].run(context)
++            self.status_tracker.update_agent_status(request_id, "masking", "running")
++            mask_result = self.coordinator.assign("masking", context)
+             req["agent_results"]["masking"] = mask_result.to_dict()
++            self.status_tracker.update_agent_status(
++                request_id, "masking", mask_result.status.value,
++                summary=mask_result.summary, duration_seconds=mask_result.duration_seconds,
++            )
+             log.info(f"ÔåÆ {mask_result.summary}")
+ 
+             if mask_result.status == AgentStatus.FAILED:
+                 req["status"] = "failed"
+                 self._save_job(req)
++                self.status_tracker.mark_completed(request_id, "failed")
+                 return self._build_report(req)
+ 
+             context["masked_data"] = mask_result.data.get("masked_data", {})
+@@ -225,8 +250,13 @@ class OrchestratorEngine:
+         # ÔöÇÔöÇ Step 4: Provisioning ÔöÇÔöÇ
+         if not req.get("skip_provisioning"):
+             log.info("[4/4] Running Data Provisioning Agent...")
+-            prov_result = self.agents["provisioning"].run(context)
++            self.status_tracker.update_agent_status(request_id, "provisioning", "running")
++            prov_result = self.coordinator.assign("provisioning", context)
+             req["agent_results"]["provisioning"] = prov_result.to_dict()
++            self.status_tracker.update_agent_status(
++                request_id, "provisioning", prov_result.status.value,
++                summary=prov_result.summary, duration_seconds=prov_result.duration_seconds,
++            )
+             log.info(f"ÔåÆ {prov_result.summary}")
+             if prov_result.status != AgentStatus.COMPLETED:
+                 status_flag = "partial"
+@@ -237,6 +267,7 @@ class OrchestratorEngine:
+         req["status"] = status_flag
+         req["completed_at"] = datetime.now().isoformat()
+         self._save_job(req)
++        self.status_tracker.mark_completed(request_id, status_flag)
+ 
+         report = self._build_report(req)
+         self._save_report(request_id, report)
+@@ -250,7 +281,14 @@ class OrchestratorEngine:
+         return self.execute_request(receipt["request_id"])
+ 
+     def get_status(self, request_id: str) -> dict:
+-        """Get current status of a request."""
++        """Get current status of a request.
++
++        Tries in-memory status tracker first (fast), falls back to metadata.db.
++        """
++        tracked = self.status_tracker.get_summary(request_id)
++        if "error" not in tracked:
++            return tracked
++
+         req = self._get_job(request_id)
+         if not req:
+             return {"error": f"Request {request_id} not found"}
+@@ -308,6 +346,7 @@ class OrchestratorEngine:
+                 }
+                 for name, result in agent_results.items()
+             },
++            "task_log": self.coordinator.get_task_log(),
+             "detailed_data": {
+                 "profile": profile_data,
+                 "subsetting": subset_data,
+diff --git a/parsers/ddl_parser.py b/parsers/ddl_parser.py
+index 842556f..f9bef28 100644
+--- a/parsers/ddl_parser.py
++++ b/parsers/ddl_parser.py
+@@ -10,6 +10,10 @@ import re
+ from pathlib import Path
+ from dataclasses import dataclass, field
+ 
++from utils.logger import get_logger
++
++log = get_logger("ddl_parser")
++
+ 
+ @dataclass
+ class DDLColumn:
+@@ -293,7 +297,7 @@ def parse_all_ddls(ddl_dir: str | Path) -> list[DDLTable]:
+             parsed = parser.parse_file(ddl_file)
+             tables.extend(parsed)
+         except Exception as e:
+-            print(f"  Warning: Failed to parse {ddl_file.name}: {e}")
++            log.warning(f"Failed to parse {ddl_file.name}: {e}")
+ 
+     return tables
+ 
+diff --git a/parsers/dml_parser.py b/parsers/dml_parser.py
+index 26ae442..307e8fb 100644
+--- a/parsers/dml_parser.py
++++ b/parsers/dml_parser.py
+@@ -11,6 +11,10 @@ import re
+ from pathlib import Path
+ from dataclasses import dataclass, field
+ 
++from utils.logger import get_logger
++
++log = get_logger("dml_parser")
++
+ 
+ @dataclass
+ class DMLField:
+@@ -365,7 +369,7 @@ def parse_all_dmls(dml_dir: str | Path) -> list[DMLSchema]:
+             schema = parser.parse_file(dml_file)
+             schemas.append(schema)
+         except Exception as e:
+-            print(f"  Warning: Failed to parse {dml_file.name}: {e}")
++            log.warning(f"Failed to parse {dml_file.name}: {e}")
+ 
+     return schemas
+ 
+diff --git a/requirements.txt b/requirements.txt
+index 4fd80ff..09f9078 100644
+--- a/requirements.txt
++++ b/requirements.txt
+@@ -1,15 +1,15 @@
+ # Core
+-fastapi==0.115.0
+-uvicorn==0.30.6
+-pydantic==2.9.0
+-python-dotenv==1.0.1
++fastapi==0.135.2
++uvicorn==0.42.0
++pydantic==2.12.5
++python-dotenv==1.2.2
+ 
+ # LLM Integration
+ anthropic==0.86.0
+ 
+ # Data Processing
+-pandas==2.2.2
+-faker==28.4.1
++pandas==3.0.1
++faker==40.11.1
+ 
+ # PII Detection & Masking (optional ÔÇö system works without these via pattern fallback)
+ # presidio-analyzer==2.2.355
+@@ -25,9 +25,10 @@ boto3==1.35.0
+ paramiko==3.5.0
+ 
+ # Utilities
+-rich==13.8.0
+-loguru==0.7.2
+-httpx==0.27.2
++rich==14.3.3
++loguru==0.7.3
++httpx==0.28.1
+ 
+ # Testing
+-pytest==8.3.3
++pytest==9.0.2
++pytest-cov==7.1.0
+diff --git a/tests/test_coordinator_status.py b/tests/test_coordinator_status.py
+new file mode 100644
+index 0000000..d45ffaf
+--- /dev/null
++++ b/tests/test_coordinator_status.py
+@@ -0,0 +1,175 @@
++"""Tests for AgentCoordinator and StatusTracker."""
++
++import pytest
++
++from agents.base_agent import BaseAgent, AgentResult, AgentStatus
++from orchestrator.coordinator import AgentCoordinator
++from orchestrator.status import StatusTracker
++
++
++# ÔöÇÔöÇ Helpers ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
++
++class _MockAgent(BaseAgent):
++    """Agent that always succeeds with a predictable result."""
++
++    def __init__(self, name="mock_agent"):
++        super().__init__(name)
++
++    def execute(self, context: dict) -> AgentResult:
++        return AgentResult(
++            agent_name=self.name,
++            status=AgentStatus.COMPLETED,
++            summary=f"{self.name} completed",
++            data={"mock": True},
++        )
++
++
++# ÔöÇÔöÇ AgentCoordinator Tests ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
++
++def test_coordinator_assign_succeeds():
++    """assign() runs the agent and returns a completed result."""
++    agents = {"profiling": _MockAgent("profiling")}
++    coord = AgentCoordinator(agents)
++    result = coord.assign("profiling", {})
++
++    assert result.status == AgentStatus.COMPLETED
++    assert result.summary == "profiling completed"
++
++
++def test_coordinator_assign_unknown_raises():
++    """assign() with unknown agent name raises KeyError."""
++    coord = AgentCoordinator({})
++    with pytest.raises(KeyError, match="Unknown agent"):
++        coord.assign("nonexistent", {})
++
++
++def test_coordinator_progress_tracking():
++    """progress property reflects step advancement."""
++    agents = {"a": _MockAgent("a"), "b": _MockAgent("b")}
++    coord = AgentCoordinator(agents)
++    assert coord.progress["current_step"] == 0
++    assert coord.progress["percent_complete"] == 0.0
++
++    coord.assign("a", {})
++    assert coord.progress["current_step"] == 1
++    assert coord.progress["percent_complete"] == 50.0
++
++    coord.assign("b", {})
++    assert coord.progress["current_step"] == 2
++    assert coord.progress["percent_complete"] == 100.0
++
++
++def test_coordinator_task_log_recording():
++    """Task log captures entries with timing and status."""
++    agents = {"profiling": _MockAgent("profiling")}
++    coord = AgentCoordinator(agents)
++    coord.assign("profiling", {})
++
++    task_log = coord.get_task_log()
++    assert len(task_log) == 1
++    entry = task_log[0]
++    assert entry["agent"] == "profiling"
++    assert entry["status"] == "completed"
++    assert "started_at" in entry
++    assert "completed_at" in entry
++    assert "duration_seconds" in entry
++
++
++def test_coordinator_reset_clears_state():
++    """reset() clears task log and resets step counter."""
++    agents = {"a": _MockAgent("a")}
++    coord = AgentCoordinator(agents)
++    coord.assign("a", {})
++    assert coord.progress["current_step"] == 1
++    assert len(coord.get_task_log()) == 1
++
++    coord.reset()
++    assert coord.progress["current_step"] == 0
++    assert len(coord.get_task_log()) == 0
++
++
++# ÔöÇÔöÇ StatusTracker Tests ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
++
++def test_tracker_register():
++    """register() creates a tracked request with initial state."""
++    tracker = StatusTracker()
++    tracker.register("req-1", {"scenario": "test", "tables": ["t1"], "record_count": 10})
++    status = tracker.get_status("req-1")
++    assert status is not None
++    assert status["status"] == "submitted"
++    assert status["scenario"] == "test"
++
++
++def test_tracker_mark_running():
++    """mark_running() updates status and sets started_at."""
++    tracker = StatusTracker()
++    tracker.register("req-1", {})
++    tracker.mark_running("req-1")
++    status = tracker.get_status("req-1")
++    assert status["status"] == "running"
++    assert status["started_at"] is not None
++
++
++def test_tracker_update_agent_status():
++    """update_agent_status() records per-agent status."""
++    tracker = StatusTracker()
++    tracker.register("req-1", {})
++    tracker.update_agent_status("req-1", "profiling", "completed", summary="Done", duration_seconds=1.5)
++    status = tracker.get_status("req-1")
++    assert "profiling" in status["agent_statuses"]
++    assert status["agent_statuses"]["profiling"]["status"] == "completed"
++    assert status["agent_statuses"]["profiling"]["duration_seconds"] == 1.5
++
++
++def test_tracker_mark_completed():
++    """mark_completed() finalizes the request status."""
++    tracker = StatusTracker()
++    tracker.register("req-1", {})
++    tracker.mark_completed("req-1", final_status="completed")
++    status = tracker.get_status("req-1")
++    assert status["status"] == "completed"
++    assert status["completed_at"] is not None
++
++
++def test_tracker_get_status_unknown_returns_none():
++    """get_status() returns None for unregistered request."""
++    tracker = StatusTracker()
++    assert tracker.get_status("nonexistent") is None
++
++
++def test_tracker_get_summary():
++    """get_summary() returns a concise status dict."""
++    tracker = StatusTracker()
++    tracker.register("req-1", {"scenario": "test"})
++    tracker.update_agent_status("req-1", "profiling", "completed")
++    summary = tracker.get_summary("req-1")
++    assert summary["request_id"] == "req-1"
++    assert "1/1 agents completed" in summary["progress"]
++
++
++def test_tracker_get_summary_unknown_returns_error():
++    """get_summary() returns error dict for unknown request."""
++    tracker = StatusTracker()
++    result = tracker.get_summary("nonexistent")
++    assert "error" in result
++
++
++def test_tracker_list_requests():
++    """list_requests() returns all tracked requests."""
++    tracker = StatusTracker()
++    tracker.register("req-1", {"scenario": "a"})
++    tracker.register("req-2", {"scenario": "b"})
++    requests = tracker.list_requests()
++    assert len(requests) == 2
++    ids = [r["request_id"] for r in requests]
++    assert "req-1" in ids
++    assert "req-2" in ids
++
++
++def test_tracker_add_error():
++    """add_error() appends errors to the request."""
++    tracker = StatusTracker()
++    tracker.register("req-1", {})
++    tracker.add_error("req-1", "Something went wrong")
++    status = tracker.get_status("req-1")
++    assert "Something went wrong" in status["errors"]
+diff --git a/utils/db_setup.py b/utils/db_setup.py
+index 1dd7060..59cea1d 100644
+--- a/utils/db_setup.py
++++ b/utils/db_setup.py
+@@ -335,7 +335,7 @@ def seed_source_data(db_path: Path, num_businesses: int = 200):
+     conn.commit()
+     conn.close()
+     print(f"  Source database created: {db_path}")
+-    print(f"  Total records: ~{num_businesses * 3 + 90}")
++    print(f"  Total records: ~{num_businesses * 3 + 180}")
+ 
+ 
+ def create_target_db(db_path: Path):
