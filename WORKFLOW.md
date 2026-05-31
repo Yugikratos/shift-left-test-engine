@@ -416,11 +416,10 @@ python -m orchestrator.demo       # full pipeline smoke run
 ```
 
 ```mermaid
-pie showData
-    title 62 Tests by Suite
+pie title Tests by Suite
     "Engine features" : 18
-    "Pipeline (e2e)" : 15
-    "Coordinator + Status" : 14
+    "Pipeline e2e" : 15
+    "Coordinator and Status" : 14
     "Parsers" : 10
     "API" : 5
 ```
