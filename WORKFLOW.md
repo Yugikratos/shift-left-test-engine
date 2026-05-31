@@ -61,34 +61,39 @@ plus a rich JSON report describing everything that happened.
 
 ## 🗺 The Big Picture
 
-```
-                         ┌─────────────────────┐
-   HTTP / CLI request →  │   FastAPI  (api/)   │
-                         └──────────┬──────────┘
-                                    │ request dict
-                                    ▼
-                         ┌─────────────────────┐         ┌──────────────────┐
-                         │  OrchestratorEngine │◀───────▶│  metadata.db     │
-                         │  (orchestrator/)    │  jobs   │  (job persist.)  │
-                         └──────────┬──────────┘         └──────────────────┘
-                                    │ shared mutable `context`
-            ┌───────────────────────┼───────────────────────┐
-            ▼                       ▼                        ▼
-   ┌────────────────┐      ┌────────────────┐       ┌────────────────┐
-   │ AgentCoordinator│     │  StatusTracker │       │   LLMClient    │
-   │ assigns + logs  │     │  live progress │       │ Claude / none  │
-   └───────┬────────┘      └────────────────┘       └────────────────┘
-           │
-           ▼  runs in strict sequence
-   ┌──────────┐   ┌───────────┐   ┌─────────┐   ┌──────────────┐
-   │ Profiling│ → │ Subsetting│ → │ Masking │ → │ Provisioning │
-   └──────────┘   └───────────┘   └─────────┘   └──────┬───────┘
-                                                       ▼
-                                         ┌──────────────────────────┐
-                                         │  Target SQLite DB         │
-                                         │  + Consolidated JSON      │
-                                         │    report (→ S3 bucket)   │
-                                         └──────────────────────────┘
+```mermaid
+flowchart TD
+    Client([🌐 HTTP / CLI Request]):::entry
+    API["⚡ FastAPI<br/><i>api/main.py</i>"]:::api
+    Engine["🎯 OrchestratorEngine<br/><i>orchestrator/engine.py</i>"]:::core
+    DB[("🗄️ metadata.db<br/>job persistence")]:::store
+
+    subgraph SUP [" Supporting Services "]
+        direction LR
+        Coord["📋 AgentCoordinator<br/>assigns + logs"]:::svc
+        Status["📡 StatusTracker<br/>live progress"]:::svc
+        LLM["🤖 LLMClient<br/>Claude / none"]:::svc
+    end
+
+    subgraph PIPE [" Sequential Agent Pipeline "]
+        direction LR
+        P1["🧠 Profiling"]:::agent --> P2["🔗 Subsetting"]:::agent --> P3["🔒 Masking"]:::agent --> P4["📦 Provisioning"]:::agent
+    end
+
+    Out[("🎯 Target SQLite DB<br/>+ 📊 JSON report → S3")]:::store
+
+    Client --> API -->|request dict| Engine
+    Engine <-->|jobs| DB
+    Engine --> SUP
+    Coord --> PIPE
+    P4 --> Out
+
+    classDef entry fill:#1e293b,stroke:#475569,color:#fff,stroke-width:2px;
+    classDef api fill:#0d9488,stroke:#0f766e,color:#fff,stroke-width:2px;
+    classDef core fill:#7c3aed,stroke:#6d28d9,color:#fff,stroke-width:2px;
+    classDef svc fill:#1e40af,stroke:#1e3a8a,color:#fff;
+    classDef agent fill:#b45309,stroke:#92400e,color:#fff,stroke-width:2px;
+    classDef store fill:#374151,stroke:#1f2937,color:#fff;
 ```
 
 > **Coordination principle:** Agents **never** call each other directly. The
@@ -214,30 +219,30 @@ NOT NULL constraints.
 
 ## 🔄 Request Lifecycle
 
-```
- submit_request(request)                          execute_request(request_id)
- ───────────────────────                          ────────────────────────────
-        │                                                    │
-        ▼                                                    ▼
- ┌───────────────┐    validate    ┌───────────────┐  build  ┌──────────────────┐
- │ Generate      │───────────────▶│ Empty tables? │────────▶│ Seed `context`   │
- │ request_id    │   date range?  │ Skip-flag     │  context│ with db paths,   │
- │ (8-char uuid) │   skip deps?    │ dependencies? │         │ tables, dates    │
- └───────┬───────┘                 └───────────────┘         └────────┬─────────┘
-         │                                                            │
-         ▼ persist to metadata.db                                     ▼
- ┌───────────────┐                              ┌──────────────────────────────┐
- │ status =      │                              │  for each non-skipped agent:  │
- │ "submitted"   │                              │   • mark running              │
- │ + exec plan   │                              │   • coordinator.assign(...)   │
- └───────────────┘                              │   • FAILED → stop & report    │
-                                                │   • else → enrich context     │
-                                                └───────────────┬───────────────┘
-                                                                ▼
-                                          ┌──────────────────────────────────────┐
-                                          │ status = completed | partial | failed │
-                                          │ → _build_report() → upload to S3       │
-                                          └────────────────────────────────────────┘
+```mermaid
+flowchart LR
+    subgraph SUBMIT [" 📥 submit_request() "]
+        direction TB
+        S1["Generate request_id<br/>(8-char uuid)"] --> S2{"Validate<br/>• tables not empty?<br/>• date range valid?<br/>• skip-flag deps?"}
+        S2 -->|❌ invalid| ERR["raise ValueError"]:::fail
+        S2 -->|✅ ok| S3["Build execution plan<br/>persist → metadata.db<br/>status = submitted"]
+    end
+
+    subgraph EXEC [" ⚙️ execute_request() "]
+        direction TB
+        E1["Seed context<br/>db paths · tables · dates"] --> E2{"for each<br/>non-skipped agent"}
+        E2 --> E3["mark running →<br/>coordinator.assign()"]
+        E3 --> E4{"result<br/>status?"}
+        E4 -->|FAILED| FAIL["status = failed<br/>stop early"]:::fail
+        E4 -->|OK| E5["enrich context<br/>→ next agent"]
+        E5 --> E2
+        E2 -->|done| FIN["_build_report()<br/>upload → S3"]:::done
+    end
+
+    S3 ==> E1
+
+    classDef fail fill:#7f1d1d,stroke:#b91c1c,color:#fff;
+    classDef done fill:#14532d,stroke:#16a34a,color:#fff;
 ```
 
 **Status terminal states**
@@ -258,19 +263,26 @@ via the `process_request()` convenience method.
 The `context` dict is the spine of the pipeline. It starts with request metadata and
 grows as each agent contributes:
 
-```
-context = {
-    request_id, scenario, tables, record_count, date_range,
-    source_db, target_db                      ← seeded by orchestrator
-}
-        │
-   ① Profiling adds  ──▶  context["profile_report"], context["pii_summary"]
-        │
-   ② Subsetting adds ──▶  context["extracted_data"]
-        │
-   ③ Masking adds    ──▶  context["masked_data"]
-        │
-   ④ Provisioning reads ▶ uses profile + extracted + masked to load & validate
+```mermaid
+sequenceDiagram
+    autonumber
+    participant O as 🎯 Orchestrator
+    participant P as 🧠 Profiling
+    participant S as 🔗 Subsetting
+    participant M as 🔒 Masking
+    participant V as 📦 Provisioning
+
+    Note over O: context = { request_id, scenario,<br/>tables, record_count, date_range,<br/>source_db, target_db }
+
+    O->>P: assign(context)
+    P-->>O: + profile_report, pii_summary
+    O->>S: assign(context)
+    S-->>O: + extracted_data
+    O->>M: assign(context)
+    M-->>O: + masked_data
+    O->>V: assign(context)
+    V-->>O: load_summary + validation ✅
+    Note over O: _build_report() → S3
 ```
 
 Each agent returns a standardised **`AgentResult`**:
@@ -322,23 +334,20 @@ curl -X POST http://localhost:8000/api/v1/provision \
 
 The engine is built to degrade gracefully — **no API key required**.
 
-```
-                    ┌──────────────────────────┐
-   Has CLAUDE key?  │      LLMClient.mode      │
-   ────────────────▶│  (lazy singleton init)   │
-                    └────────────┬─────────────┘
-              ┌──────────────────┴──────────────────┐
-              ▼                                      ▼
-   ┌─────────────────────┐               ┌─────────────────────────┐
-   │  🟢 LLM MODE         │               │  ⚪ RULE-BASED MODE      │
-   │  Claude analyses     │               │  Pattern matching from   │
-   │  schema intelligently│               │  config/settings.py      │
-   │                      │               │  (_nm, _addr, _phone…)   │
-   └─────────────────────┘               └─────────────────────────┘
-              └──────────────────┬──────────────────┘
-                                 ▼
-              Same AgentResult contract either way.
-       (LLMClient returns None when unavailable — callers handle it.)
+```mermaid
+flowchart TD
+    Q{"🔑 CLAUDE_API_KEY<br/>present?<br/><i>LLMClient lazy init</i>"}:::q
+    Q -->|yes| L["🟢 LLM MODE<br/>Claude analyses<br/>schema intelligently"]:::on
+    Q -->|no| R["⚪ RULE-BASED MODE<br/>Pattern matching from<br/>config/settings.py<br/>(_nm · _addr · _phone …)"]:::off
+    L --> C["✅ Same AgentResult contract<br/>either way"]:::contract
+    R --> C
+    C -.->|LLMClient returns None<br/>when unavailable| Note["callers handle gracefully"]:::note
+
+    classDef q fill:#7c3aed,stroke:#6d28d9,color:#fff,stroke-width:2px;
+    classDef on fill:#14532d,stroke:#16a34a,color:#fff;
+    classDef off fill:#334155,stroke:#64748b,color:#fff;
+    classDef contract fill:#0d9488,stroke:#0f766e,color:#fff,stroke-width:2px;
+    classDef note fill:#1e293b,stroke:#475569,color:#cbd5e1;
 ```
 
 > Pattern rules (PII / control / SCD-2 / relationships) all live in
@@ -354,12 +363,19 @@ Everything else fails fast.
 
 **Skip flags** — any agent can be skipped, but dependencies are enforced at submit time:
 
-```
-   skip_subsetting  ⛔  but not skip_masking      → ❌ ValueError
-   (masking needs extracted data)
+```mermaid
+flowchart LR
+    A["skip_subsetting<br/>✅ true"]:::skip --> B{"skip_masking<br/>also true?"}:::q
+    B -->|no| X1["❌ ValueError<br/><i>masking needs<br/>extracted data</i>"]:::fail
+    B -->|yes| C["skip_masking<br/>✅ true"]:::skip
+    C --> D{"skip_provisioning<br/>also true?"}:::q
+    D -->|no| X2["❌ ValueError<br/><i>provisioning needs<br/>masked data</i>"]:::fail
+    D -->|yes| OK["✅ valid plan"]:::ok
 
-   skip_masking     ⛔  but not skip_provisioning → ❌ ValueError
-   (provisioning needs masked data)
+    classDef skip fill:#334155,stroke:#64748b,color:#fff;
+    classDef q fill:#7c3aed,stroke:#6d28d9,color:#fff;
+    classDef fail fill:#7f1d1d,stroke:#b91c1c,color:#fff;
+    classDef ok fill:#14532d,stroke:#16a34a,color:#fff;
 ```
 
 | Flag | Allowed alone? | Reason |
@@ -397,6 +413,16 @@ uvicorn api.main:app --reload --port 8000
 ```powershell
 python -m pytest tests/ -v        # all 62 tests
 python -m orchestrator.demo       # full pipeline smoke run
+```
+
+```mermaid
+pie showData
+    title 62 Tests by Suite
+    "Engine features" : 18
+    "Pipeline (e2e)" : 15
+    "Coordinator + Status" : 14
+    "Parsers" : 10
+    "API" : 5
 ```
 
 | File | Tests | Covers |
